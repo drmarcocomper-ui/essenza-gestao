@@ -57,3 +57,10 @@ O banco já contém 123 clientes e 413 lançamentos de 2026 importados
 da planilha (origem_registro = 'planilha'). Não gerar seed, não criar
 dados de teste, não truncar tabela. Use os dados reais para
 desenvolver e testar.
+
+## Segurança
+Toda view criada em migration DEVE ter `with (security_invoker = true)`.
+Sem isso a view roda como o dono e ignora a RLS, expondo dados à chave
+anônima que vai no bundle do navegador.
+Após criar ou alterar view/tabela, sondar com a anon key numa aba
+anônima e confirmar que retorna [].
