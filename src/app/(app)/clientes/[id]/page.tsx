@@ -6,6 +6,7 @@ import { MessageCircle, Pencil, Phone } from "lucide-react";
 import BotaoAtivo from "@/components/clientes/BotaoAtivo";
 import HistoricoCliente from "@/components/clientes/HistoricoCliente";
 import { obterCliente, obterHistorico } from "@/lib/clientes/consultas";
+import { resolveClienteDesde } from "@/lib/clientes/desde";
 import {
   formatarData,
   formatarMoeda,
@@ -35,6 +36,10 @@ export default async function ClientePage({
 
   const historico = await obterHistorico(cliente.id);
   const whatsapp = linkWhatsApp(cliente.telefone);
+  const clienteDesde = resolveClienteDesde(
+    cliente.data_cadastro,
+    historico.primeiroAtendimento,
+  );
 
   return (
     <div className="space-y-6">
@@ -90,12 +95,8 @@ export default async function ClientePage({
             rotulo="Nascimento"
             valor={formatarData(cliente.data_nascimento)}
           />
-          <Dado
-            rotulo="Município"
-            valor={[cliente.bairro, cliente.municipio]
-              .filter(Boolean)
-              .join(" — ")}
-          />
+          <Dado rotulo="Bairro" valor={cliente.bairro} />
+          <Dado rotulo="Município" valor={cliente.municipio} />
           <Dado rotulo="Profissão" valor={cliente.profissao} />
           <Dado rotulo="Preferências" valor={cliente.preferencias} />
           <Dado rotulo="Como conheceu" valor={cliente.origem} />
@@ -104,21 +105,27 @@ export default async function ClientePage({
       </section>
 
       <section className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+        {/* Sem "Cliente desde", "Total gasto" ocupa a linha toda em vez de
+            deixar meia tela vazia. */}
+        <div
+          className={`rounded-2xl border border-neutral-200 bg-white p-4 ${
+            clienteDesde ? "" : "col-span-2"
+          }`}
+        >
           <p className="text-xs text-neutral-500">Total gasto</p>
           <p className="mt-1 text-lg font-semibold text-neutral-900 tabular-nums">
             {formatarMoeda(historico.total)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-          <p className="text-xs text-neutral-500">Cliente desde</p>
-          <p className="mt-1 text-lg font-semibold text-neutral-900 tabular-nums">
-            {formatarData(historico.primeiroAtendimento) ||
-              formatarData(cliente.data_cadastro) ||
-              "—"}
-          </p>
-        </div>
+        {clienteDesde && (
+          <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+            <p className="text-xs text-neutral-500">Cliente desde</p>
+            <p className="mt-1 text-lg font-semibold text-neutral-900 tabular-nums">
+              {formatarData(clienteDesde)}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">

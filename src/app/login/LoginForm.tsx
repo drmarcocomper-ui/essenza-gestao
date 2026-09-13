@@ -11,13 +11,25 @@ type Estado = "idle" | "entrando" | "erro";
 
 const emailSchema = z.email();
 
+/** Erro de credencial é esperado: vira mensagem própria e não vai ao console. */
+function ehCredencialInvalida(codigo: string | undefined, mensagem: string) {
+  return (
+    codigo === "invalid_credentials" ||
+    /invalid login credentials/i.test(mensagem)
+  );
+}
+
 /**
  * Credencial errada nunca diz *o que* errou: email inexistente e senha
  * errada voltam a mesma mensagem, que é o que o Supabase faz em
  * `invalid_credentials`.
+ *
+ * O resto — chave inválida, projeto fora do ar, CORS — cai na mensagem
+ * genérica de propósito: a tela não é lugar de detalhe interno. O detalhe
+ * vai para o console em `registrarErro`.
  */
 function mensagemDeErro(codigo: string | undefined, mensagem: string) {
-  if (codigo === "invalid_credentials" || /invalid login credentials/i.test(mensagem)) {
+  if (ehCredencialInvalida(codigo, mensagem)) {
     return "Email ou senha incorretos.";
   }
 
@@ -26,6 +38,20 @@ function mensagemDeErro(codigo: string | undefined, mensagem: string) {
   }
 
   return "Não foi possível entrar. Tente de novo.";
+}
+
+/**
+ * Um erro de chave do Supabase já passou despercebido aqui, escondido
+ * atrás da mensagem genérica. Em desenvolvimento o erro real vai para o
+ * console; em produção fica de fora, para não expor configuração a quem
+ * abrir o DevTools no celular.
+ */
+function registrarErro(erro: { code?: string; message: string }) {
+  if (process.env.NODE_ENV === "production") return;
+
+  if (ehCredencialInvalida(erro.code, erro.message)) return;
+
+  console.error("Falha no login:", erro);
 }
 
 export default function LoginForm() {
@@ -68,6 +94,7 @@ export default function LoginForm() {
     });
 
     if (error) {
+      registrarErro(error);
       setEstado("erro");
       setErro(mensagemDeErro(error.code, error.message));
       return;
