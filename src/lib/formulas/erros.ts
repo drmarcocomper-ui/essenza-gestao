@@ -74,6 +74,17 @@ export function classificarFalhaUpload(
 
   // Falhou antes de sair do celular: o arquivo é que não serve.
   if (etapa === "preparar") {
+    // HEIC é o padrão da câmera do iPhone e não abre em Chrome, Firefox
+    // nem Edge. Dizer só "tente outra foto" faria ela tentar a próxima
+    // foto da câmera, que é HEIC também — e falhar de novo.
+    if (casa(mensagem, /formatonaosuportado|heic|heif/i)) {
+      return {
+        texto:
+          "Foto em HEIC, que este navegador não abre. No iPhone: Ajustes › Câmera › Formatos › Mais compatível.",
+        podeTentarDeNovo: true,
+      };
+    }
+
     return {
       texto: "Não consegui ler essa imagem. Tente outra foto.",
       podeTentarDeNovo: true,

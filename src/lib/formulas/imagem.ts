@@ -42,6 +42,30 @@ export function calcularDimensoes(
   };
 }
 
+/** Nome do erro de formato, para a mensagem na tela saber o que dizer. */
+export const ERRO_FORMATO = "FormatoNaoSuportado";
+
+/**
+ * O arquivo é HEIC/HEIF, o formato padrão da câmera do iPhone.
+ *
+ * O `type` vem vazio em boa parte dos casos (o iOS não preenche o MIME
+ * quando o arquivo sai pelo app Arquivos), então a extensão é a checagem
+ * que realmente pega — e é por isso que as duas existem.
+ */
+export function ehHeic(arquivo: { name: string; type: string }) {
+  return (
+    /^image\/(heic|heif)(-sequence)?$/i.test(arquivo.type) ||
+    /\.(heic|heif)$/i.test(arquivo.name)
+  );
+}
+
+function erroDeFormato(formato: string) {
+  const erro = new Error(`O navegador não decodifica ${formato}.`);
+  erro.name = ERRO_FORMATO;
+
+  return erro;
+}
+
 /**
  * Reduz e recomprime a foto. Só roda no navegador.
  *
@@ -50,9 +74,23 @@ export function calcularDimensoes(
  * o "antes" sobe deitado, e não há como consertar depois do upload.
  */
 export async function reduzirImagem(arquivo: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(arquivo, {
-    imageOrientation: "from-image",
-  });
+  let bitmap: ImageBitmap;
+
+  try {
+    bitmap = await createImageBitmap(arquivo, {
+      imageOrientation: "from-image",
+    });
+  } catch (falha) {
+    // HEIC é tratado DEPOIS da falha, nunca antes: o Safari decodifica
+    // HEIC, e é o Safari que a Kamylle usa no iPhone. Recusar o formato
+    // de saída quebraria justamente o caminho que funciona hoje — quem
+    // não decodifica é Chrome, Firefox e Edge, e só eles chegam aqui.
+    if (ehHeic(arquivo)) {
+      throw erroDeFormato("HEIC");
+    }
+
+    throw falha;
+  }
 
   try {
     const { largura, altura } = calcularDimensoes(bitmap.width, bitmap.height);

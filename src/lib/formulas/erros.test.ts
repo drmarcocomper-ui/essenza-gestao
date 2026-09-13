@@ -27,6 +27,42 @@ describe("classificarFalhaUpload", () => {
     expect(falha.texto).toMatch(/outra foto/i);
   });
 
+  describe("HEIC do iPhone", () => {
+    /** O erro que `reduzirImagem` levanta quando o HEIC não decodifica. */
+    function erroHeic() {
+      const erro = new Error("O navegador não decodifica HEIC.");
+      erro.name = "FormatoNaoSuportado";
+      return erro;
+    }
+
+    it("nomeia o formato em vez de mandar tentar outra foto", () => {
+      // "Tente outra foto" faria ela ir na próxima foto da câmera, que é
+      // HEIC também, e falhar de novo.
+      const falha = classificarFalhaUpload("preparar", erroHeic());
+
+      expect(falha.texto).toMatch(/heic/i);
+      expect(falha.texto).not.toMatch(/outra foto/i);
+    });
+
+    it("diz onde mudar o ajuste no iPhone", () => {
+      const falha = classificarFalhaUpload("preparar", erroHeic());
+
+      expect(falha.texto).toMatch(/mais compatível/i);
+      expect(falha.podeTentarDeNovo).toBe(true);
+    });
+
+    it("também pega o InvalidStateError cru do navegador", () => {
+      // Se o erro chegar sem o nome marcado, a palavra HEIC na mensagem
+      // ainda resolve.
+      const falha = classificarFalhaUpload(
+        "preparar",
+        new Error("InvalidStateError ao ler heic"),
+      );
+
+      expect(falha.texto).toMatch(/heic/i);
+    });
+  });
+
   describe("manda chamar o Marco quando é configuração", () => {
     it("policy faltando (RLS)", () => {
       const falha = classificarFalhaUpload(
