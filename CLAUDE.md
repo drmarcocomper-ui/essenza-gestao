@@ -15,8 +15,12 @@ não será comercializado.
 
 ## Stack
 Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind 4 + Supabase.
-@supabase/ssr 0.10.x — usar SEMPRE o padrão getAll/setAll nos cookies.
+@supabase/ssr 0.12.x — usar SEMPRE o padrão getAll/setAll nos cookies.
 O padrão antigo get/set/remove está deprecado e quebra em silêncio.
+No proxy, setAll recebe (cookiesToSet, headers) — o segundo argumento
+existe a partir da 0.11 e carrega os headers de no-cache.
+Next 16: middleware.ts foi substituído por src/proxy.ts. Não recriar
+middleware.ts.
 
 ## Banco
 Schema em supabase/migrations/. Aplicado manualmente pelo SQL Editor.
