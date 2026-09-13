@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MessageCircle, Pencil, Phone } from "lucide-react";
+import {
+  CalendarPlus,
+  MessageCircle,
+  Pencil,
+  Phone,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 
+import ListaAtendimentos from "@/components/atendimentos/ListaAtendimentos";
 import BotaoAtivo from "@/components/clientes/BotaoAtivo";
 import HistoricoCliente from "@/components/clientes/HistoricoCliente";
+import ListaFormulas from "@/components/formulas/ListaFormulas";
+import { listarAtendimentos } from "@/lib/atendimentos/consultas";
 import { obterCliente, obterHistorico } from "@/lib/clientes/consultas";
 import { resolveClienteDesde } from "@/lib/clientes/desde";
 import {
@@ -13,6 +23,7 @@ import {
   formatarTelefone,
   linkWhatsApp,
 } from "@/lib/formatters";
+import { listarFormulas } from "@/lib/formulas/consultas";
 
 export async function generateMetadata({
   params,
@@ -34,7 +45,17 @@ export default async function ClientePage({
     notFound();
   }
 
-  const historico = await obterHistorico(cliente.id);
+  // Três consultas independentes: em paralelo, não em fila.
+  const [historico, formulas, atendimentos] = await Promise.all([
+    obterHistorico(cliente.id),
+    listarFormulas(cliente.id),
+    listarAtendimentos(cliente.id),
+  ]);
+
+  // A lista já vem da mais recente para a mais antiga: repetir é sempre
+  // a primeira, sem consulta a mais.
+  const ultimaFormula = formulas[0] ?? null;
+
   const whatsapp = linkWhatsApp(cliente.telefone);
   const clienteDesde = resolveClienteDesde(
     cliente.data_cadastro,
@@ -104,6 +125,40 @@ export default async function ClientePage({
         </dl>
       </section>
 
+      {/* Da cliente até a fórmula nova em um toque — é daqui que ela sai
+          para trabalhar, com o celular na mão e a cliente na cadeira. */}
+      <section className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href={`/clientes/${cliente.id}/formulas/nova`}
+            className={`flex h-14 items-center justify-center gap-2 rounded-xl bg-rose-600 font-medium text-white active:bg-rose-700 ${
+              ultimaFormula ? "" : "col-span-2"
+            }`}
+          >
+            <Plus aria-hidden="true" className="size-5" />
+            Nova fórmula
+          </Link>
+
+          {ultimaFormula && (
+            <Link
+              href={`/clientes/${cliente.id}/formulas/nova?repetir=${ultimaFormula.id}`}
+              className="flex h-14 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-white font-medium text-rose-700 active:bg-rose-50"
+            >
+              <RotateCcw aria-hidden="true" className="size-5" />
+              Repetir última
+            </Link>
+          )}
+        </div>
+
+        <Link
+          href={`/clientes/${cliente.id}/atendimentos/novo`}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
+        >
+          <CalendarPlus aria-hidden="true" className="size-5" />
+          Novo atendimento
+        </Link>
+      </section>
+
       <section className="grid grid-cols-2 gap-3">
         {/* Sem "Cliente desde", "Total gasto" ocupa a linha toda em vez de
             deixar meia tela vazia. */}
@@ -130,7 +185,26 @@ export default async function ClientePage({
 
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-neutral-500">
-          Histórico ({historico.lancamentos.length})
+          Fórmulas ({formulas.length})
+        </h3>
+
+        <ListaFormulas clienteId={cliente.id} formulas={formulas} />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-neutral-500">
+          Atendimentos ({atendimentos.length})
+        </h3>
+
+        <ListaAtendimentos
+          clienteId={cliente.id}
+          atendimentos={atendimentos}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-neutral-500">
+          Histórico financeiro ({historico.lancamentos.length})
         </h3>
 
         <HistoricoCliente lancamentos={historico.lancamentos} />
