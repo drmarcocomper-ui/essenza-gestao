@@ -92,7 +92,17 @@ export const config = {
      * Tudo, menos arquivos estáticos e imagens:
      * - _next/static, _next/image
      * - favicon e assets de imagem na raiz de /public
+     * - sw.js e manifest.webmanifest, os dois arquivos do PWA
+     *
+     * Os dois do PWA precisam sair daqui: o browser busca o manifest sem
+     * cookie (credentials omitidos) e recusa registrar um service worker
+     * cujo script responde redirect. Passando pelo proxy, ambos voltavam
+     * 307 para /login e o app não instalava. Nenhum dos dois carrega dado
+     * de ninguém — e o sw.js nunca cacheia navegação nem Supabase.
+     *
+     * As duas exclusões são ancoradas em $: sem a âncora, /sw.js/qualquer
+     * coisa também escaparia do proxy.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
