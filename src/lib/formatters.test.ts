@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   apenasDigitos,
   formatarData,
+  formatarDiaMes,
   formatarMoeda,
   formatarTelefone,
   linkWhatsApp,
+  mascararMoeda,
   mascararTelefone,
+  moedaParaNumero,
+  valorParaCampo,
 } from "./formatters";
 
 describe("formatarMoeda", () => {
@@ -95,5 +99,94 @@ describe("linkWhatsApp", () => {
   it("devolve null para telefone ausente ou curto", () => {
     expect(linkWhatsApp(null)).toBeNull();
     expect(linkWhatsApp("99998888")).toBeNull();
+  });
+});
+
+describe("formatarDiaMes", () => {
+  it("mostra só dia e mês", () => {
+    expect(formatarDiaMes("2026-03-14")).toBe("14/03");
+  });
+
+  it("devolve vazio sem data", () => {
+    expect(formatarDiaMes(null)).toBe("");
+  });
+});
+
+describe("mascararMoeda", () => {
+  it("monta o valor da direita para a esquerda, em centavos", () => {
+    expect(mascararMoeda("1")).toBe("0,01");
+    expect(mascararMoeda("18")).toBe("0,18");
+    expect(mascararMoeda("18000")).toBe("180,00");
+  });
+
+  it("põe separador de milhar", () => {
+    expect(mascararMoeda("123450")).toBe("1.234,50");
+  });
+
+  it("aceita o que já está mascarado, sem mudar o valor", () => {
+    expect(mascararMoeda("1.234,50")).toBe("1.234,50");
+  });
+
+  it("aceita o numeric do banco", () => {
+    expect(mascararMoeda("180.00")).toBe("180,00");
+  });
+
+  it("deixa zero passar — é cortesia", () => {
+    expect(mascararMoeda("0")).toBe("0,00");
+  });
+
+  it("devolve vazio quando não há dígito", () => {
+    expect(mascararMoeda("")).toBe("");
+    expect(mascararMoeda("abc")).toBe("");
+  });
+});
+
+describe("moedaParaNumero", () => {
+  it("lê de volta o que a máscara escreveu", () => {
+    expect(moedaParaNumero("180,00")).toBe(180);
+    expect(moedaParaNumero("1.234,50")).toBe(1234.5);
+    expect(moedaParaNumero("0,00")).toBe(0);
+  });
+
+  it("entende o ponto como milhar quando não há vírgula", () => {
+    expect(moedaParaNumero("1.234")).toBe(1234);
+  });
+
+  it("entende o ponto como decimal quando veio de teclado de computador", () => {
+    expect(moedaParaNumero("180.50")).toBe(180.5);
+  });
+
+  it("ignora o R$ colado junto", () => {
+    expect(moedaParaNumero("R$ 180,00")).toBe(180);
+  });
+
+  it("devolve null quando não sobra número", () => {
+    expect(moedaParaNumero("")).toBeNull();
+    expect(moedaParaNumero("   ")).toBeNull();
+    expect(moedaParaNumero(null)).toBeNull();
+    expect(moedaParaNumero("abc")).toBeNull();
+  });
+});
+
+describe("valorParaCampo", () => {
+  it("devolve as duas casas que o JSON do banco perde", () => {
+    // numeric(10,2) chega como número: 180.00 vira 180. Sem as casas de
+    // volta, a máscara leria isso como R$ 1,80.
+    expect(valorParaCampo(180)).toBe("180,00");
+    expect(valorParaCampo(1234.5)).toBe("1.234,50");
+  });
+
+  it("faz a volta completa com a máscara", () => {
+    expect(mascararMoeda(valorParaCampo(180))).toBe("180,00");
+    expect(moedaParaNumero(valorParaCampo(1234.5))).toBe(1234.5);
+  });
+
+  it("mostra a cortesia como 0,00", () => {
+    expect(valorParaCampo(0)).toBe("0,00");
+  });
+
+  it("devolve vazio quando não há valor — lançamento novo", () => {
+    expect(valorParaCampo(null)).toBe("");
+    expect(valorParaCampo(undefined)).toBe("");
   });
 });
