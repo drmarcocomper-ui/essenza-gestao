@@ -26,9 +26,12 @@ export type DadosAtendimento = z.infer<typeof atendimentoSchema>;
  * Serviço escolhido no formulário.
  *
  * `id` vazio significa serviço que ela acabou de digitar: o catálogo
- * ainda não o tem e a action o cadastra antes de gravar o item. O item
- * de atendimento exige `servico_id` (chk_item_referencia da 001), então
- * não há caminho de texto solto.
+ * ainda não o tem. O item de atendimento exige `servico_id`
+ * (chk_item_referencia da 001), então não há caminho de texto solto.
+ *
+ * `confirmadoNovo` é o "sim" que ela deu à pergunta da tela. Sem ele a
+ * action recusa criar serviço, mesmo que o POST venha de fora da UI:
+ * cadastro de catálogo não pode acontecer em silêncio.
  */
 export const servicoEscolhidoSchema = z.object({
   id: z
@@ -45,6 +48,8 @@ export const servicoEscolhidoSchema = z.object({
     .trim()
     .min(2, "Nome do serviço muito curto")
     .max(120, "Máximo de 120 caracteres"),
+
+  confirmadoNovo: z.boolean(),
 });
 
 export const servicosSchema = z
@@ -69,13 +74,18 @@ export function lerFormulario(formData: FormData) {
   ) as Record<CampoAtendimento, string>;
 }
 
-/** Duas listas paralelas: id (pode ser vazio) e nome. */
+/** Três listas paralelas: id (pode ser vazio), nome e a confirmação. */
 export function lerServicos(formData: FormData) {
   const ids = formData.getAll("servico_id").map(String);
+  const confirmacoes = formData.getAll("servico_novo").map(String);
 
   return formData
     .getAll("servico_nome")
-    .map((nome, indice) => ({ id: ids[indice] ?? "", nome: String(nome) }))
+    .map((nome, indice) => ({
+      id: ids[indice] ?? "",
+      nome: String(nome),
+      confirmadoNovo: confirmacoes[indice] === "1",
+    }))
     .filter((servico) => servico.nome.trim() !== "");
 }
 

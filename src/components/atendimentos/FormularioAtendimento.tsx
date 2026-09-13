@@ -7,10 +7,14 @@ import { Check, Plus, X } from "lucide-react";
 import type { EstadoAtendimento } from "@/app/(app)/clientes/[id]/atendimentos/actions";
 import type { ServicoCatalogo } from "@/lib/atendimentos/consultas";
 import type { CampoAtendimento } from "@/lib/atendimentos/schema";
+import {
+  acharServicoPorNome,
+  jaEscolhido as nomeJaEscolhido,
+} from "@/lib/atendimentos/servicos";
 import { hoje } from "@/lib/caixa/mes";
 
 type Escolhido = {
-  /** null = serviço digitado agora, que ainda não está no catálogo. */
+  /** null = serviço confirmado como novo, que a action vai cadastrar. */
   id: string | null;
   nome: string;
 };
@@ -49,6 +53,8 @@ export default function FormularioAtendimento({
 
   const [escolhidos, setEscolhidos] = useState<Escolhido[]>([]);
   const [novo, setNovo] = useState("");
+  /** Nome à espera do "sim" para virar serviço novo no catálogo. */
+  const [perguntando, setPerguntando] = useState<string | null>(null);
   const [comFormula, setComFormula] = useState(false);
 
   const idData = useId();
@@ -59,12 +65,6 @@ export default function FormularioAtendimento({
 
   const avulsos = escolhidos.filter((servico) => servico.id === null);
 
-  function jaEscolhido(nome: string) {
-    return escolhidos.some(
-      (servico) => servico.nome.toLowerCase() === nome.trim().toLowerCase(),
-    );
-  }
-
   function alternar(servico: ServicoCatalogo) {
     setEscolhidos((atuais) =>
       atuais.some((escolhido) => escolhido.id === servico.id)
@@ -73,15 +73,39 @@ export default function FormularioAtendimento({
     );
   }
 
+  /**
+   * O que ela digitou primeiro é procurado no catálogo pelo nome
+   * normalizado: "coloracao" acha "Coloração" e entra como o serviço que
+   * já existe. Só o que não casa com nada abre a pergunta — catálogo
+   * novo nunca nasce em silêncio.
+   */
   function adicionarNovo() {
     const nome = novo.trim();
 
-    if (nome.length < 2 || jaEscolhido(nome)) {
+    if (nome.length < 2 || nomeJaEscolhido(escolhidos, nome)) {
       setNovo("");
       return;
     }
 
-    setEscolhidos((atuais) => [...atuais, { id: null, nome }]);
+    const existente = acharServicoPorNome(servicos, nome);
+
+    if (existente) {
+      setEscolhidos((atuais) => [
+        ...atuais,
+        { id: existente.id, nome: existente.nome },
+      ]);
+      setNovo("");
+      return;
+    }
+
+    setPerguntando(nome);
+  }
+
+  function confirmarNovo() {
+    if (!perguntando) return;
+
+    setEscolhidos((atuais) => [...atuais, { id: null, nome: perguntando }]);
+    setPerguntando(null);
     setNovo("");
   }
 
@@ -96,12 +120,18 @@ export default function FormularioAtendimento({
         </p>
       )}
 
-      {/* Os escolhidos viajam como duas listas paralelas; o id vazio é o
-          serviço novo, que a action cadastra antes de gravar o item. */}
+      {/* Os escolhidos viajam como três listas paralelas. O id vazio é o
+          serviço a cadastrar, e `servico_novo` é o "sim" que ela deu na
+          pergunta — sem ele a action recusa criar. */}
       {escolhidos.map((servico, indice) => (
         <div key={`${servico.id ?? "novo"}-${indice}`} hidden>
           <input type="hidden" name="servico_id" value={servico.id ?? ""} />
           <input type="hidden" name="servico_nome" value={servico.nome} />
+          <input
+            type="hidden"
+            name="servico_novo"
+            value={servico.id === null ? "1" : "0"}
+          />
         </div>
       ))}
 
@@ -164,6 +194,18 @@ export default function FormularioAtendimento({
                 >
                   {marcado && <Check aria-hidden="true" className="size-4" />}
                   {servico.nome}
+
+                  {/* Nasceu numa tela destas e continua sem preço: é aqui
+                      que ela esbarra nele de novo para acertar. */}
+                  {servico.semPreco && (
+                    <span
+                      className={`text-xs font-normal ${
+                        marcado ? "text-rose-100" : "text-amber-700"
+                      }`}
+                    >
+                      · sem preço
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -178,6 +220,9 @@ export default function FormularioAtendimento({
                 className="flex min-h-11 items-center gap-1.5 rounded-full border border-rose-600 bg-rose-600 pr-2 pl-4 text-sm font-medium text-white"
               >
                 {servico.nome}
+                <span className="text-xs font-normal text-rose-100">
+                  · novo
+                </span>
                 <button
                   type="button"
                   onClick={() =>
@@ -210,7 +255,12 @@ export default function FormularioAtendimento({
             id={idNovo}
             type="text"
             value={novo}
-            onChange={(evento) => setNovo(evento.target.value)}
+            onChange={(evento) => {
+              setNovo(evento.target.value);
+              // Continuar digitando desfaz a pergunta: ela é sobre o nome
+              // de um instante atrás, que já não é o que está no campo.
+              setPerguntando(null);
+            }}
             onKeyDown={(evento) => {
               // Enter aqui adiciona o serviço, não envia o atendimento
               // pela metade.
@@ -235,6 +285,40 @@ export default function FormularioAtendimento({
             <Plus aria-hidden="true" className="size-5" />
           </button>
         </div>
+
+        {/* Cadastro de catálogo nunca acontece em silêncio: o nome que
+            não casou com nada existente passa por aqui antes. */}
+        {perguntando && (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div>
+              <p className="text-sm font-medium text-amber-900">
+                Cadastrar “{perguntando}” como serviço novo?
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Entra no catálogo sem preço, marcado para você acertar
+                depois.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPerguntando(null)}
+                className="h-11 flex-1 rounded-xl border border-neutral-300 bg-white text-sm font-medium text-neutral-700 active:bg-neutral-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmarNovo}
+                className="h-11 flex-1 rounded-xl bg-amber-600 text-sm font-medium text-white active:bg-amber-700"
+              >
+                Cadastrar
+              </button>
+            </div>
+          </div>
+        )}
       </fieldset>
 
       <div>

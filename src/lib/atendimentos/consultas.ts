@@ -3,6 +3,11 @@ import { exigirSessao } from "@/lib/auth";
 export type ServicoCatalogo = {
   id: string;
   nome: string;
+  /**
+   * Nasceu no ato de um atendimento e continua sem preço. É a marca que
+   * a leva de volta a ele para precificar (migration 008).
+   */
+  semPreco: boolean;
 };
 
 export type AtendimentoNaLista = {
@@ -17,21 +22,48 @@ export type AtendimentoNaLista = {
 /** Quantos atendimentos a ficha da cliente mostra. */
 const LIMITE_LISTA = 20;
 
-/** Catálogo de serviços, para os chips do formulário de atendimento. */
-export async function listarServicos(): Promise<ServicoCatalogo[]> {
+/**
+ * Catálogo de serviços, para os chips do formulário de atendimento.
+ *
+ * `incluirInativos` é para a conferência de nome antes de cadastrar um
+ * serviço novo: reusar um serviço inativo é sempre melhor que criar uma
+ * segunda linha com o mesmo nome.
+ */
+export async function listarServicos({
+  incluirInativos = false,
+}: { incluirInativos?: boolean } = {}): Promise<ServicoCatalogo[]> {
   const { supabase } = await exigirSessao();
 
-  const { data, error } = await supabase
+  let consulta = supabase
     .from("servicos")
-    .select("id, nome")
-    .eq("ativo", true)
+    .select("id, nome, preco_padrao, origem_registro")
     .order("nome", { ascending: true });
+
+  if (!incluirInativos) {
+    consulta = consulta.eq("ativo", true);
+  }
+
+  const { data, error } = await consulta;
 
   if (error) {
     throw new Error(`Não foi possível carregar os serviços: ${error.message}`);
   }
 
-  return (data ?? []) as ServicoCatalogo[];
+  const linhas = (data ?? []) as {
+    id: string;
+    nome: string;
+    // numeric chega como string do PostgREST.
+    preco_padrao: string | number;
+    origem_registro: string;
+  }[];
+
+  return linhas.map((linha) => ({
+    id: linha.id,
+    nome: linha.nome,
+    semPreco:
+      linha.origem_registro === "atendimento" &&
+      Number(linha.preco_padrao) === 0,
+  }));
 }
 
 /**

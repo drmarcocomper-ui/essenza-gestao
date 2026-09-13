@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { exigirSessao } from "@/lib/auth";
+import { listarServicos } from "@/lib/atendimentos/consultas";
 import {
   atendimentoSchema,
   errosPorCampo,
@@ -14,6 +14,8 @@ import {
   type CampoErroAtendimento,
   type ServicoEscolhido,
 } from "@/lib/atendimentos/schema";
+import { acharServicoPorNome } from "@/lib/atendimentos/servicos";
+import { exigirSessao } from "@/lib/auth";
 
 export type EstadoAtendimento = {
   erros?: Partial<Record<CampoErroAtendimento, string>>;
@@ -23,58 +25,100 @@ export type EstadoAtendimento = {
 
 type ClienteSupabase = Awaited<ReturnType<typeof exigirSessao>>["supabase"];
 
+type ServicoResolvido = { id: string; nome: string };
+
+type Resolucao =
+  | { ok: true; servicos: ServicoResolvido[] }
+  | { ok: false; mensagem: string };
+
 /**
  * Converte os serviços escolhidos em ids do catálogo.
  *
  * `atendimento_itens` exige `servico_id` (chk_item_referencia da 001),
- * então serviço digitado na hora entra no catálogo antes de virar item.
- * Preço fica em zero: o catálogo aqui serve para nomear o que foi feito,
- * e tabela de preço não faz parte desta fase.
+ * então serviço digitado na hora precisa entrar no catálogo antes de
+ * virar item. Três defesas contra o catálogo virar lixo:
+ *
+ * 1. O nome é comparado NORMALIZADO (sem acento, sem caixa, sem espaço
+ *    sobrando) contra o catálogo inteiro, inativos incluídos —
+ *    "Coloração", "coloracao" e "Coloração " são a mesma linha.
+ * 2. Criar exige a confirmação que a tela pediu. Um POST direto na
+ *    action, sem passar pela UI, é recusado em vez de cadastrar.
+ * 3. O nome gravado no item vem do catálogo, não do navegador.
+ *
+ * Preço fica em zero e `origem_registro` em 'atendimento' (migration
+ * 008): é assim que ela acha depois o que falta precificar.
  */
 async function resolverServicos(
   supabase: ClienteSupabase,
   escolhidos: ServicoEscolhido[],
-) {
-  const resolvidos: { id: string; nome: string }[] = [];
+): Promise<Resolucao> {
+  // Uma leitura só do catálogo, com inativos: reusar um serviço inativo
+  // é melhor que criar uma segunda linha com o mesmo nome.
+  const catalogo = await listarServicos({ incluirInativos: true });
+
+  const resolvidos: ServicoResolvido[] = [];
 
   for (const servico of escolhidos) {
+    const jaResolvido = (id: string) =>
+      resolvidos.some((resolvido) => resolvido.id === id);
+
     if (servico.id) {
-      resolvidos.push({ id: servico.id, nome: servico.nome });
+      const doCatalogo = catalogo.find((linha) => linha.id === servico.id);
+
+      if (!doCatalogo) {
+        return {
+          ok: false,
+          mensagem: "Um dos serviços escolhidos não está mais no catálogo.",
+        };
+      }
+
+      // Nome canônico do banco, não o que veio do formulário.
+      if (!jaResolvido(doCatalogo.id)) {
+        resolvidos.push({ id: doCatalogo.id, nome: doCatalogo.nome });
+      }
+
       continue;
     }
 
-    // Digitou o nome de um serviço que já existe (com outra caixa, ou
-    // porque o chip estava fora da tela): reusa em vez de duplicar.
-    const { data: existente, error: erroBusca } = await supabase
-      .from("servicos")
-      .select("id, nome")
-      .ilike("nome", servico.nome)
-      .limit(1)
-      .maybeSingle();
-
-    if (erroBusca) {
-      throw new Error(erroBusca.message);
-    }
+    const existente = acharServicoPorNome(catalogo, servico.nome);
 
     if (existente) {
-      resolvidos.push(existente as { id: string; nome: string });
+      if (!jaResolvido(existente.id)) {
+        resolvidos.push({ id: existente.id, nome: existente.nome });
+      }
+
       continue;
     }
 
-    const { data: criado, error: erroCriacao } = await supabase
+    if (!servico.confirmadoNovo) {
+      return {
+        ok: false,
+        mensagem: `Confirme o cadastro de "${servico.nome}" como serviço novo antes de salvar.`,
+      };
+    }
+
+    const { data: criado, error } = await supabase
       .from("servicos")
-      .insert({ nome: servico.nome })
+      .insert({ nome: servico.nome, origem_registro: "atendimento" })
       .select("id, nome")
       .single();
 
-    if (erroCriacao) {
-      throw new Error(erroCriacao.message);
+    if (error) {
+      return {
+        ok: false,
+        mensagem: `Não foi possível cadastrar "${servico.nome}": ${error.message}`,
+      };
     }
 
-    resolvidos.push(criado as { id: string; nome: string });
+    const novo = criado as ServicoResolvido;
+
+    // Entra no catálogo em memória: se ela digitou o mesmo nome duas
+    // vezes na mesma tela, a segunda casa com a primeira.
+    catalogo.push({ ...novo, semPreco: true });
+    resolvidos.push(novo);
   }
 
-  return resolvidos;
+  return { ok: true, servicos: resolvidos };
 }
 
 /**
@@ -114,18 +158,17 @@ export async function criarAtendimento(
     };
   }
 
-  let servicos: { id: string; nome: string }[];
+  const resolucao = await resolverServicos(supabase, validacaoServicos.data);
 
-  try {
-    servicos = await resolverServicos(supabase, validacaoServicos.data);
-  } catch (erro) {
+  if (!resolucao.ok) {
+    // Erro de serviço aparece junto dos chips, que é onde ela resolve.
     return {
-      mensagem: `Não foi possível salvar os serviços: ${
-        erro instanceof Error ? erro.message : "erro desconhecido"
-      }`,
+      erros: { servicos: resolucao.mensagem },
       valores: bruto,
     };
   }
+
+  const servicos = resolucao.servicos;
 
   const { data, error } = await supabase
     .from("atendimentos")
