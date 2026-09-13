@@ -29,9 +29,11 @@ de migration já aplicada.
 RLS ligada em todas as tabelas, com policy única para `authenticated`.
 
 ## Auth
-Magic link por email. Signup desabilitado no Supabase: `signInWithOtp`
-deve ir sempre com `shouldCreateUser: false`, senão email digitado
-errado retorna erro genérico.
+Login com email e senha via signInWithPassword. Signup desabilitado
+no Supabase; usuários são criados manualmente no painel. Não existe
+fluxo de "esqueci minha senha" no app — reset é feito pelo painel.
+Não há SMTP configurado: nenhuma feature pode depender de envio de
+email.
 
 ## Validação antes de todo commit
 npx tsc --noEmit && npx vitest run && npm run build

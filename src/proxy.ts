@@ -13,7 +13,7 @@ import { supabaseEnv } from "@/lib/supabase/env";
  * exige login. Lista de exceções em vez de lista de protegidas: rota nova
  * nasce protegida por padrão.
  */
-const ROTAS_PUBLICAS = ["/login", "/auth/callback"];
+const ROTAS_PUBLICAS = ["/login"];
 
 function ehRotaPublica(pathname: string) {
   return ROTAS_PUBLICAS.some(
