@@ -8,10 +8,33 @@ import {
   registrarFoto,
   removerFoto,
 } from "@/app/(app)/clientes/[id]/formulas/actions";
+import {
+  classificarFalhaUpload,
+  type EtapaUpload,
+  type FalhaUpload,
+} from "@/lib/formulas/erros";
 import { reduzirImagem } from "@/lib/formulas/imagem";
 import { MOMENTOS, ROTULO_MOMENTO, type Momento } from "@/lib/formulas/schema";
 import { BUCKET_FORMULAS, caminhoFoto } from "@/lib/formulas/storage";
 import { createClient } from "@/lib/supabase/client";
+
+/**
+ * O erro real do Supabase vai para o console fora de produção — mesmo
+ * arranjo do login. Em produção fica de fora: a tela não é lugar de
+ * detalhe interno, e o DevTools do celular é público demais.
+ */
+function registrarFalha(etapa: EtapaUpload, erro: unknown) {
+  if (process.env.NODE_ENV === "production") return;
+
+  console.error(`Falha ao ${etapa} a foto:`, erro);
+}
+
+/** Rastro do que foi tentado, para ler junto com a falha. */
+function registrarPasso(passo: string, dados: Record<string, unknown>) {
+  if (process.env.NODE_ENV === "production") return;
+
+  console.info(`Foto — ${passo}:`, dados);
+}
 
 export type FotoNaFicha = {
   momento: Momento;
@@ -71,7 +94,7 @@ function Slot({
   /** Prévia local: aparece antes de a URL assinada voltar do servidor. */
   const [previa, setPrevia] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<FalhaUpload | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [removendo, iniciarRemocao] = useTransition();
 
@@ -81,22 +104,40 @@ function Slot({
     setErro(null);
     setEnviando(true);
 
+    // Em qual passo parou: é o que separa "arquivo ruim" de "policy
+    // errada" na hora de escrever a mensagem.
+    let etapa: EtapaUpload = "preparar";
+
     try {
       const reduzida = await reduzirImagem(arquivo);
+
+      etapa = "enviar";
+
+      const caminho = caminhoFoto(clienteId, formulaId, momento);
+
+      registrarPasso("vai subir", {
+        caminho,
+        bucket: BUCKET_FORMULAS,
+        bytes: reduzida.size,
+        tipo: reduzida.type,
+      });
 
       const supabase = createClient();
 
       const { error } = await supabase.storage
         .from(BUCKET_FORMULAS)
-        .upload(caminhoFoto(clienteId, formulaId, momento), reduzida, {
+        .upload(caminho, reduzida, {
           contentType: "image/jpeg",
           // Refazer a foto substitui a anterior: o caminho é o mesmo e a
           // fórmula continua com no máximo duas.
           upsert: true,
         });
 
-      if (error) throw new Error(error.message);
+      // Repassa o erro inteiro, não só a mensagem: `status` e
+      // `statusCode` são o que distingue permissão de limite de tamanho.
+      if (error) throw error;
 
+      etapa = "registrar";
       await registrarFoto(clienteId, formulaId, momento);
 
       // Mostra o que acabou de subir sem esperar a próxima URL assinada.
@@ -106,10 +147,18 @@ function Slot({
       });
 
       router.refresh();
-    } catch {
-      // A mensagem do servidor vira texto genérico em produção; o aviso
-      // útil aqui é o que ela pode fazer a respeito.
-      setErro("Não foi possível enviar. Tente de novo.");
+    } catch (falha) {
+      registrarFalha(etapa, falha);
+
+      setErro(
+        classificarFalhaUpload(
+          etapa,
+          falha,
+          // navigator.onLine só é confiável no negativo: false é offline
+          // de verdade, true não promete que a internet funciona.
+          typeof navigator === "undefined" ? true : navigator.onLine,
+        ),
+      );
     } finally {
       setEnviando(false);
       // Libera o input para reenviar o mesmo arquivo, se for o caso.
@@ -131,8 +180,12 @@ function Slot({
 
         setConfirmando(false);
         router.refresh();
-      } catch {
-        setErro("Não foi possível apagar. Tente de novo.");
+      } catch (falha) {
+        registrarFalha("registrar", falha);
+        setErro({
+          texto: "Não foi possível apagar. Tente de novo.",
+          podeTentarDeNovo: true,
+        });
         setConfirmando(false);
       }
     });
@@ -224,8 +277,17 @@ function Slot({
         ))}
 
       {erro && (
-        <p role="alert" className="text-sm text-rose-700">
-          {erro}
+        /* Dois tons porque são dois destinos: âmbar é "tenta de novo",
+           vermelho é "não adianta insistir, chama o Marco". */
+        <p
+          role="alert"
+          className={`rounded-lg px-2 py-1.5 text-sm ${
+            erro.podeTentarDeNovo
+              ? "bg-amber-50 text-amber-900"
+              : "bg-rose-50 font-medium text-rose-800"
+          }`}
+        >
+          {erro.texto}
         </p>
       )}
     </div>

@@ -73,8 +73,18 @@ export async function reduzirImagem(arquivo: File): Promise<Blob> {
       canvas.toBlob(resolve, "image/jpeg", QUALIDADE),
     );
 
-    if (!blob) {
+    if (!blob || blob.size === 0) {
       throw new Error("O navegador não conseguiu preparar a foto.");
+    }
+
+    // `toBlob` cai para PNG em silêncio quando o navegador não codifica o
+    // tipo pedido. Passar isso adiante subiria bytes PNG com o nome
+    // .jpg e o contentType image/jpeg — mentira que só apareceria muito
+    // depois, num bucket que valida MIME.
+    if (blob.type !== "image/jpeg") {
+      throw new Error(
+        `O navegador gerou ${blob.type || "um tipo desconhecido"} em vez de JPEG.`,
+      );
     }
 
     return blob;
