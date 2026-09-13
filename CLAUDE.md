@@ -51,3 +51,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Dados
+O banco já contém 123 clientes e 413 lançamentos de 2026 importados
+da planilha (origem_registro = 'planilha'). Não gerar seed, não criar
+dados de teste, não truncar tabela. Use os dados reais para
+desenvolver e testar.
