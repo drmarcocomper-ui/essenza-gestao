@@ -103,4 +103,48 @@ describe("LoginForm", () => {
       "current-password",
     );
   });
+
+  /**
+   * A senha já foi para a URL uma vez: com `name` nos campos, o submit
+   * que chega antes da hidratação virava `GET /login?email=…&senha=…`, e
+   * a senha ficou no histórico do celular e no log do servidor.
+   *
+   * As duas defesas abaixo são independentes de propósito — uma impede
+   * que exista o que serializar, a outra impede a navegação nativa.
+   */
+  describe("não deixa a senha vazar por submit nativo", () => {
+    it("não põe name nos campos, que é o que o navegador serializaria", () => {
+      render(<LoginForm />);
+
+      expect(screen.getByLabelText("Senha")).not.toHaveAttribute("name");
+      expect(screen.getByLabelText("Email")).not.toHaveAttribute("name");
+    });
+
+    it("aborta a submissão nativa com method=dialog fora de um <dialog>", () => {
+      render(<LoginForm />);
+
+      const formulario = screen.getByLabelText("Senha").closest("form");
+
+      expect(formulario).toHaveAttribute("method", "dialog");
+      // Sem <dialog> em volta, é isso que faz o HTML abortar a submissão
+      // em vez de navegar.
+      expect(formulario?.closest("dialog")).toBeNull();
+    });
+
+    it("continua enviando pelo submit do formulário depois de hidratar", async () => {
+      // A proteção não pode ter custado o caminho normal: Enter no campo
+      // e toque no botão passam pelo submit, que o onSubmit intercepta.
+      render(<LoginForm />);
+
+      preencher("kamylle@essenza.com", "senha-secreta");
+      fireEvent.submit(screen.getByLabelText("Senha").closest("form")!);
+
+      await waitFor(() => expect(replace).toHaveBeenCalledWith("/hoje"));
+
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: "kamylle@essenza.com",
+        password: "senha-secreta",
+      });
+    });
+  });
 });

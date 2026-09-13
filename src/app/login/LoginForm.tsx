@@ -115,7 +115,28 @@ export default function LoginForm() {
         </h1>
         <p className="mt-2 text-neutral-600">Entre com seu email e senha.</p>
 
-        <form onSubmit={entrar} className="mt-8 space-y-4" noValidate>
+        {/*
+          `method="dialog"` num form que não está dentro de um <dialog>:
+          pelo HTML, a submissão é abortada nesse caso. O evento `submit`
+          ainda dispara — é o que o `onSubmit` acima usa depois de
+          hidratar —, mas a navegação nativa não acontece.
+
+          É o que protege o toque que chega ANTES da hidratação, no
+          celular com rede ruim. Sem isso o navegador fazia o submit
+          nativo, que é GET para a própria URL com os campos no query
+          string: a senha ia para o histórico do celular e para o log do
+          servidor. Aconteceu de verdade.
+
+          Uma linha, e nada mais muda: o botão continua `type="submit"`,
+          Enter continua enviando, e o gerenciador de senhas continua
+          vendo um formulário de login de verdade.
+        */}
+        <form
+          onSubmit={entrar}
+          method="dialog"
+          className="mt-8 space-y-4"
+          noValidate
+        >
           <div>
             <label
               htmlFor="email"
@@ -123,9 +144,14 @@ export default function LoginForm() {
             >
               Email
             </label>
+            {/*
+              Sem `name`: o campo é controlado por estado e o login não
+              lê FormData, então o atributo só servia para o navegador ter
+              o que pôr na URL num submit nativo. É a segunda defesa, a
+              que vale até em navegador que ignore method="dialog".
+            */}
             <input
               id="email"
-              name="email"
               type="email"
               inputMode="email"
               // "username" (e não "email") para o gerenciador de senhas do
@@ -151,9 +177,9 @@ export default function LoginForm() {
               Senha
             </label>
             <div className="relative mt-1">
+              {/* Sem `name`, pelo mesmo motivo do campo de email. */}
               <input
                 id="senha"
-                name="senha"
                 type={mostrarSenha ? "text" : "password"}
                 autoComplete="current-password"
                 autoCapitalize="none"
