@@ -178,12 +178,15 @@ const CATEGORIA_LANCAMENTO: Record<CategoriaServico, string> = {
 export const CATEGORIA_PRODUTO = "Produto";
 
 /**
+ * O valor vago, e o que a conta recebe quando mistura categorias.
  * Serviço sem categoria — estado normal, ver 012 — e serviço com
- * categoria fora da lista da aplicação caem aqui.
+ * categoria fora da lista da aplicação também caem aqui.
+ *
+ * É a ordem 1 de `categorias_lancamento` (002).
  */
 export const CATEGORIA_PADRAO = "Serviço";
 
-export type ItemClassificavel = LinhaValor & {
+export type ItemClassificavel = {
   tipo: "servico" | "produto";
   /** `servicos.categoria` crua; null e valor desconhecido são previstos. */
   categoria?: string | null;
@@ -200,33 +203,30 @@ function categoriaDoItem(item: ItemClassificavel) {
 }
 
 /**
- * A categoria que os lançamentos da conta recebem.
+ * A categoria que os lançamentos da conta recebem, POR UNANIMIDADE.
  *
- * `lancamentos.categoria` é `not null` e uma conta só tem uma, mas a
- * mesma conta mistura coloração, corte e produto. A escolhida é a de
- * maior valor — o que a conta foi, principalmente. Empate fica com o
- * item escolhido primeiro, e não com uma ordem fixa: numa conta de
- * cortesia todos os totais são zero, e aí o primeiro item é a única
- * pista do que ela veio fazer.
+ * `lancamentos.categoria` é `not null` e a conta tem uma só, mas a mesma
+ * conta mistura coloração, corte e produto. Quando todos os itens caem
+ * na mesma categoria traduzida, é ela; quando a conta mistura, é
+ * "Serviço".
+ *
+ * Escolher a categoria de maior valor mentiria: corte de 350 com produto
+ * de 650 lançaria os 1.000 inteiros como Produto, e a view de resumo
+ * passaria a afirmar uma venda de revenda que não houve. "Serviço" é
+ * vago; "Produto" é errado.
+ *
+ * A composição verdadeira da conta está em `atendimento_itens`, item a
+ * item, com valor e quantidade. A categoria do lançamento é resumo com
+ * perda, não fonte — quem precisar do detalhe lê os itens.
  */
 export function categoriaDaConta(itens: readonly ItemClassificavel[]) {
   if (itens.length === 0) return CATEGORIA_PADRAO;
 
-  const totais = new Map<string, number>();
+  const primeira = categoriaDoItem(itens[0]);
 
-  for (const item of itens) {
-    const categoria = categoriaDoItem(item);
-
-    totais.set(categoria, (totais.get(categoria) ?? 0) + totalLinha(item));
-  }
-
-  let escolhida = categoriaDoItem(itens[0]);
-
-  for (const [categoria, total] of totais) {
-    if (total > (totais.get(escolhida) ?? 0)) escolhida = categoria;
-  }
-
-  return escolhida;
+  return itens.every((item) => categoriaDoItem(item) === primeira)
+    ? primeira
+    : CATEGORIA_PADRAO;
 }
 
 /** Teto de `lancamentos.descricao` no schema do Caixa. */

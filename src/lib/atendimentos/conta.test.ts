@@ -201,13 +201,53 @@ describe("valor do item", () => {
 });
 
 describe("categoria do lançamento", () => {
-  it("segue o item de maior valor", () => {
+  it("é a categoria de todos quando todos são a mesma", () => {
     expect(
       categoriaDaConta([
-        item(150, 1, { categoria: "corte" }),
         item(350, 1, { categoria: "coloracao" }),
+        item(380, 1, { categoria: "coloracao" }),
       ]),
     ).toBe("Coloração");
+  });
+
+  it("conta misturada cai em Serviço, que é vago e não errado", () => {
+    // O caso que derrubou a regra antiga: pela de maior valor, os 1.000
+    // inteiros iriam como Produto, e o resumo do mês afirmaria uma venda
+    // de revenda de 1.000 que não houve.
+    expect(
+      categoriaDaConta([
+        item(350, 1, { categoria: "corte" }),
+        item(650, 1, { tipo: "produto" }),
+      ]),
+    ).toBe("Serviço");
+  });
+
+  it("mistura de dois serviços de categorias diferentes também", () => {
+    expect(
+      categoriaDaConta([
+        item(350, 1, { categoria: "coloracao" }),
+        item(150, 1, { categoria: "corte" }),
+      ]),
+    ).toBe("Serviço");
+  });
+
+  it("valor nenhum entra na decisão", () => {
+    // Mesmas categorias, valores invertidos: mesma resposta.
+    expect(
+      categoriaDaConta([
+        item(10, 1, { categoria: "tratamento" }),
+        item(9990, 1, { categoria: "tratamento" }),
+      ]),
+    ).toBe("Tratamento");
+  });
+
+  it("conta só de produtos é Produto", () => {
+    expect(
+      categoriaDaConta([
+        item(229.9, 1, { tipo: "produto" }),
+        item(399, 2, { tipo: "produto" }),
+      ]),
+    ).toBe("Produto");
   });
 
   it("traduz o vocabulário do catálogo para o do Caixa", () => {
@@ -234,23 +274,41 @@ describe("categoria do lançamento", () => {
     );
   });
 
-  it("soma as linhas da mesma categoria antes de comparar", () => {
+  it("um item fora da unanimidade já derruba a conta inteira", () => {
     expect(
       categoriaDaConta([
+        item(120, 1, { categoria: "tratamento" }),
+        item(120, 1, { categoria: "tratamento" }),
         item(200, 1, { categoria: "coloracao" }),
-        item(120, 1, { categoria: "tratamento" }),
-        item(120, 1, { categoria: "tratamento" }),
       ]),
-    ).toBe("Tratamento");
+    ).toBe("Serviço");
   });
 
-  it("empate fica com o primeiro item, que é o caso da cortesia", () => {
+  it("serviço sem categoria unânime com um categorizado é mistura", () => {
+    // "Revisão" é o serviço sem categoria do catálogo: traduzido, ele é
+    // "Serviço", e ao lado de uma coloração a conta deixa de ser unânime.
+    expect(
+      categoriaDaConta([
+        item(150, 1, { categoria: null }),
+        item(350, 1, { categoria: "coloracao" }),
+      ]),
+    ).toBe("Serviço");
+  });
+
+  it("cortesia não vira caso especial: vale a unanimidade, não o valor", () => {
+    expect(
+      categoriaDaConta([
+        item(0, 1, { categoria: "corte" }),
+        item(0, 1, { categoria: "corte" }),
+      ]),
+    ).toBe("Corte");
+
     expect(
       categoriaDaConta([
         item(0, 1, { categoria: "corte" }),
         item(0, 1, { tipo: "produto" }),
       ]),
-    ).toBe("Corte");
+    ).toBe("Serviço");
   });
 
   it("conta sem item nenhum não quebra", () => {

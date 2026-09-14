@@ -92,6 +92,16 @@ export async function fecharConta(
     };
   }
 
+  // JANELA DE CORRIDA, conhecida e aceita aqui: a verificação acima é
+  // leitura antes da escrita. Dois POSTs simultâneos no mesmo
+  // atendimento — duas abas, dois aparelhos — passam os dois pela
+  // verificação antes de qualquer um inserir, e o dinheiro entra
+  // duplicado no Caixa. Fechar isso é trabalho do banco: índice único
+  // PARCIAL em `lancamentos.atendimento_id`. Parcial porque conta
+  // dividida grava N lançamentos legítimos no mesmo atendimento, então
+  // o `where` precisa de um recorte que pegue uma linha só por conta.
+  // É migration, e fica para uma sessão de migration.
+
   const [servicos, produtos] = await Promise.all([
     listarServicos({ incluirInativos: true }),
     listarProdutosRevenda(),
@@ -141,11 +151,11 @@ export async function fecharConta(
     });
   }
 
+  // Só tipo e categoria: a categoria do lançamento é por unanimidade, e
+  // valor nenhum entra nessa decisão.
   const classificaveis = itens.map((item) => ({
     tipo: item.tipo,
     categoria: item.categoria,
-    quantidade: item.quantidade,
-    valorUnitario: item.valor_unitario,
   }));
 
   // (a) — limpa o que estava lá. É o que deixa uma segunda tentativa,
