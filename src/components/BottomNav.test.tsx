@@ -10,21 +10,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("BottomNav", () => {
-  it("mostra os 4 itens com seus destinos", () => {
+  it("mostra os 3 itens com seus destinos", () => {
     render(<BottomNav />);
 
     const itens = screen.getAllByRole("link");
 
-    expect(itens).toHaveLength(4);
+    expect(itens).toHaveLength(3);
     expect(itens.map((item) => item.textContent)).toEqual([
       "Hoje",
-      "Agenda",
       "Clientes",
       "Caixa",
     ]);
     expect(itens.map((item) => item.getAttribute("href"))).toEqual([
       "/hoje",
-      "/agenda",
       "/clientes",
       "/caixa",
     ]);

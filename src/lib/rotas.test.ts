@@ -18,11 +18,13 @@ const APP = path.join(RAIZ, "src/app");
 /**
  * Rotas que o app já linka e que ainda não foram construídas. Ficam aqui
  * de propósito, uma a uma: entrar nesta lista é decisão, não descuido.
+ *
+ * Vazia hoje, e o normal é continuar vazia: todo link do app aponta para
+ * uma rota que existe. Ela serve para o caso em que a tela venha antes da
+ * rota de propósito — aí o caminho entra aqui, com o motivo escrito ao
+ * lado, e sai assim que a rota nascer.
  */
-const ROTAS_PENDENTES = [
-  // Aba da BottomNav; o módulo de agenda não faz parte da Fase 1.
-  "/agenda",
-];
+const ROTAS_PENDENTES: string[] = [];
 
 /** Arquivos de código onde um link pode estar escrito. */
 function arquivosDeCodigo(dir: string): string[] {

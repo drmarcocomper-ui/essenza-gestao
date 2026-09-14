@@ -30,7 +30,7 @@ export default async function HojePage() {
       </section>
 
       <p className="text-neutral-600">
-        A agenda do dia aparece aqui em breve.
+        O resumo do dia aparece aqui em breve.
       </p>
 
       <BotaoSair />
