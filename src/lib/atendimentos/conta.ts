@@ -78,6 +78,26 @@ export function titularidadeDe(
   return escolhida === "PF" || escolhida === "PJ" ? escolhida : null;
 }
 
+/**
+ * Instituição para `lancamentos.forma_pagamento`, quando a instituição
+ * determina a forma sem chute.
+ *
+ * São duas colunas diferentes e não sinônimas: `forma_pagamento` é como
+ * o dinheiro andou ("Pix"), `instituicao` é onde ele caiu ("Nubank"). A
+ * tela só pergunta a segunda, porque é o que ela sabe de cabeça na hora.
+ *
+ * Só Dinheiro e Cortesia se traduzem sozinhas. SumUp é maquininha e não
+ * diz se foi débito ou crédito; Nubank e PicPay recebem Pix e
+ * transferência; Terceiro não diz nada. Nas outras quatro a coluna fica
+ * null — que é o "Não informada" que o próprio formulário do Caixa
+ * oferece, e é melhor que inventar forma no meio de 413 lançamentos de
+ * histórico que ela usa para conferir o mês.
+ */
+export const FORMA_POR_INSTITUICAO: Partial<Record<Instituicao, string>> = {
+  Dinheiro: "Dinheiro",
+  Cortesia: "Cortesia",
+};
+
 // ---------------------------------------------------------------------
 // Soma
 // ---------------------------------------------------------------------

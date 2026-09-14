@@ -51,6 +51,43 @@ export type AtendimentoNaLista = {
   servicos: string[];
   /** Fórmula registrada neste atendimento, quando houve coloração. */
   formulaId: string | null;
+  /**
+   * Conta fechada é "existe lançamento com este atendimento_id". Não há
+   * coluna de status: o lançamento é o próprio fato.
+   */
+  fechada: boolean;
+  /** Soma dos lançamentos da conta. Zero enquanto ela está aberta. */
+  total: number;
+};
+
+export type ItemDoAtendimento = {
+  id: string;
+  tipo: "servico" | "produto";
+  servicoId: string | null;
+  produtoId: string | null;
+  /** Snapshot do nome no momento da venda. */
+  descricao: string;
+  quantidade: number;
+  valorUnitario: number;
+};
+
+export type FormaDaConta = {
+  id: string;
+  instituicao: string | null;
+  titularidade: string | null;
+  valor: number;
+  dataCaixa: string | null;
+};
+
+export type AtendimentoDetalhe = {
+  id: string;
+  clienteId: string;
+  data: string;
+  observacao: string | null;
+  itens: ItemDoAtendimento[];
+  formas: FormaDaConta[];
+  formulaId: string | null;
+  fechada: boolean;
 };
 
 /** Quantos atendimentos a ficha da cliente mostra. */
@@ -153,7 +190,9 @@ export async function listarAtendimentos(
 
   const { data, error } = await supabase
     .from("atendimentos")
-    .select("id, data, observacao, atendimento_itens(descricao), formulas(id)")
+    .select(
+      "id, data, observacao, atendimento_itens(descricao), formulas(id), lancamentos(valor)",
+    )
     .eq("cliente_id", clienteId)
     .order("data", { ascending: false })
     .order("criado_em", { ascending: false })
@@ -171,6 +210,7 @@ export async function listarAtendimentos(
     observacao: string | null;
     atendimento_itens: { descricao: string }[];
     formulas: { id: string }[];
+    lancamentos: { valor: number | string }[];
   }[];
 
   return linhas.map((linha) => ({
@@ -179,5 +219,95 @@ export async function listarAtendimentos(
     observacao: linha.observacao,
     servicos: linha.atendimento_itens.map((item) => item.descricao),
     formulaId: linha.formulas[0]?.id ?? null,
+    fechada: linha.lancamentos.length > 0,
+    total: linha.lancamentos.reduce(
+      (soma, lancamento) => soma + Number(lancamento.valor),
+      0,
+    ),
   }));
+}
+
+/**
+ * Um atendimento com tudo que a tela dele mostra: itens, formas de
+ * pagamento e a fórmula, se houve.
+ *
+ * O `cliente_id` entra no filtro, e não só o id do atendimento: a URL
+ * traz os dois, e um atendimento de outra cliente aberto por uma URL
+ * montada à mão tem que dar 404, não mostrar a conta de quem não é.
+ *
+ * Conta fechada é a existência de lançamento com este `atendimento_id`.
+ * É o que a ordem de gravação garante — os lançamentos entram por
+ * último, então o que tem lançamento tem item, e nunca o contrário.
+ */
+export async function obterAtendimento(
+  clienteId: string,
+  atendimentoId: string,
+): Promise<AtendimentoDetalhe | null> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("atendimentos")
+    .select(
+      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa), formulas(id)",
+    )
+    .eq("id", atendimentoId)
+    .eq("cliente_id", clienteId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Não foi possível carregar o atendimento: ${error.message}`,
+    );
+  }
+
+  if (!data) return null;
+
+  const linha = data as unknown as {
+    id: string;
+    cliente_id: string;
+    data: string;
+    observacao: string | null;
+    atendimento_itens: {
+      id: string;
+      tipo: "servico" | "produto";
+      servico_id: string | null;
+      produto_id: string | null;
+      descricao: string;
+      quantidade: number | string;
+      valor_unitario: number | string;
+    }[];
+    lancamentos: {
+      id: string;
+      instituicao: string | null;
+      titularidade: string | null;
+      valor: number | string;
+      data_caixa: string | null;
+    }[];
+    formulas: { id: string }[];
+  };
+
+  return {
+    id: linha.id,
+    clienteId: linha.cliente_id,
+    data: linha.data,
+    observacao: linha.observacao,
+    itens: linha.atendimento_itens.map((item) => ({
+      id: item.id,
+      tipo: item.tipo,
+      servicoId: item.servico_id,
+      produtoId: item.produto_id,
+      descricao: item.descricao,
+      quantidade: Number(item.quantidade),
+      valorUnitario: Number(item.valor_unitario),
+    })),
+    formas: linha.lancamentos.map((lancamento) => ({
+      id: lancamento.id,
+      instituicao: lancamento.instituicao,
+      titularidade: lancamento.titularidade,
+      valor: Number(lancamento.valor),
+      dataCaixa: lancamento.data_caixa,
+    })),
+    formulaId: linha.formulas[0]?.id ?? null,
+    fechada: linha.lancamentos.length > 0,
+  };
 }

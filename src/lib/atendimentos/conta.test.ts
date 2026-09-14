@@ -7,11 +7,13 @@ import {
   diferencaConta,
   exigeTitularidade,
   formaContaSchema,
+  FORMA_POR_INSTITUICAO,
   itemContaSchema,
   lerConta,
   titularidadeDe,
   totalItens,
 } from "@/lib/atendimentos/conta";
+import { FORMAS_PAGAMENTO } from "@/lib/caixa/schema";
 
 const SERVICO = "11111111-1111-4111-8111-111111111111";
 const PRODUTO = "22222222-2222-4222-8222-222222222222";
@@ -128,6 +130,27 @@ describe("titularidade", () => {
         valor: "10,00",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("forma de pagamento gravada", () => {
+  it("traduz só as duas instituições que não deixam dúvida", () => {
+    expect(FORMA_POR_INSTITUICAO.Dinheiro).toBe("Dinheiro");
+    expect(FORMA_POR_INSTITUICAO.Cortesia).toBe("Cortesia");
+  });
+
+  it("deixa null onde a instituição não diz como o dinheiro andou", () => {
+    // SumUp é maquininha (débito ou crédito?), Nubank e PicPay recebem
+    // Pix e transferência, Terceiro não diz nada.
+    for (const instituicao of ["SumUp", "Nubank", "PicPay", "Terceiro"] as const) {
+      expect(FORMA_POR_INSTITUICAO[instituicao]).toBeUndefined();
+    }
+  });
+
+  it("as traduções existem no check da coluna (002)", () => {
+    for (const forma of Object.values(FORMA_POR_INSTITUICAO)) {
+      expect(FORMAS_PAGAMENTO).toContain(forma);
+    }
   });
 });
 

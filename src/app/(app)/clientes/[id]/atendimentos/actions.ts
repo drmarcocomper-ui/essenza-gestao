@@ -208,10 +208,12 @@ export async function criarAtendimento(
   revalidatePath(`/clientes/${clienteId}`);
 
   // Dois caminhos a partir daqui: coloração segue direto para a ficha de
-  // fórmula, já amarrada neste atendimento; o resto volta para a cliente.
+  // fórmula, já amarrada neste atendimento. O resto vai para a tela do
+  // atendimento, onde a conta está aberta esperando — é o passo seguinte
+  // com a cliente ainda na cadeira.
   redirect(
     comFormula
       ? `/clientes/${clienteId}/formulas/nova?atendimento=${data.id}`
-      : `/clientes/${clienteId}`,
+      : `/clientes/${clienteId}/atendimentos/${data.id}`,
   );
 }

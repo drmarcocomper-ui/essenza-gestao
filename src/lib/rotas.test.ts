@@ -140,6 +140,7 @@ describe("rotas do módulo de fórmula e atendimento", () => {
     "src/app/(app)/clientes/[id]/formulas/nova/page.tsx",
     "src/app/(app)/clientes/[id]/formulas/[formulaId]/page.tsx",
     "src/app/(app)/clientes/[id]/atendimentos/novo/page.tsx",
+    "src/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/page.tsx",
   ];
 
   it.each(ARQUIVOS)("%s existe", (arquivo) => {
@@ -150,6 +151,7 @@ describe("rotas do módulo de fórmula e atendimento", () => {
     "/clientes/:dyn/formulas/nova",
     "/clientes/:dyn/formulas/:dyn",
     "/clientes/:dyn/atendimentos/novo",
+    "/clientes/:dyn/atendimentos/:dyn",
   ])("%s é uma rota navegável", (caminho) => {
     expect(rotaExiste(caminho)).toBe(true);
   });
