@@ -114,7 +114,7 @@ async function resolverServicos(
 
     // Entra no catálogo em memória: se ela digitou o mesmo nome duas
     // vezes na mesma tela, a segunda casa com a primeira.
-    catalogo.push({ ...novo, semPreco: true });
+    catalogo.push({ ...novo, categoria: null, preco: null, semPreco: true });
     resolvidos.push(novo);
   }
 
