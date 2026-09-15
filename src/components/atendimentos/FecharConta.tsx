@@ -1,9 +1,13 @@
 "use client";
 
 import { useActionState, useId, useRef, useState } from "react";
-import { Check, ChevronDown, Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 
 import type { EstadoConta } from "@/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/actions";
+import {
+  ChipDeCatalogo,
+  GrupoDeChips,
+} from "@/components/atendimentos/ChipsDeCatalogo";
 import {
   diferencaConta,
   exigeTitularidade,
@@ -21,11 +25,7 @@ import type {
 } from "@/lib/atendimentos/consultas";
 import { hoje } from "@/lib/caixa/mes";
 import { mascararMoeda, moedaParaNumero } from "@/lib/formatters";
-import {
-  CATEGORIAS,
-  ROTULOS_CATEGORIA,
-  type CategoriaServico,
-} from "@/lib/servicos/schema";
+import { agruparPorCategoria } from "@/lib/servicos/grupos";
 
 export type LinhaItem = {
   tipo: "servico" | "produto";
@@ -52,9 +52,6 @@ type Props = {
 };
 
 const ESTADO_INICIAL: EstadoConta = {};
-
-/** Grupo sem categoria. Chave vazia porque não existe no banco. */
-const SEM_CATEGORIA = "";
 
 const classeCampo =
   "h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base text-neutral-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 focus:outline-none";
@@ -215,8 +212,8 @@ export default function FecharConta({
           </p>
         )}
 
-        {gruposDeServico(servicos).map((grupo) => (
-          <Grupo
+        {agruparPorCategoria(servicos).map((grupo) => (
+          <GrupoDeChips
             key={grupo.chave || "sem-categoria"}
             rotulo={grupo.rotulo}
             escolhidos={
@@ -226,7 +223,7 @@ export default function FecharConta({
             }
           >
             {grupo.servicos.map((servico) => (
-              <Chip
+              <ChipDeCatalogo
                 key={servico.id}
                 nome={servico.nome}
                 marcado={escolhido("servico", servico.id)}
@@ -242,11 +239,11 @@ export default function FecharConta({
                 }
               />
             ))}
-          </Grupo>
+          </GrupoDeChips>
         ))}
 
         {produtos.length > 0 && (
-          <Grupo
+          <GrupoDeChips
             rotulo="Produtos"
             escolhidos={
               produtos.filter((produto) => escolhido("produto", produto.id))
@@ -254,7 +251,7 @@ export default function FecharConta({
             }
           >
             {produtos.map((produto) => (
-              <Chip
+              <ChipDeCatalogo
                 key={produto.id}
                 nome={produto.nome}
                 marcado={escolhido("produto", produto.id)}
@@ -270,7 +267,7 @@ export default function FecharConta({
                 }
               />
             ))}
-          </Grupo>
+          </GrupoDeChips>
         )}
       </section>
 
@@ -534,39 +531,6 @@ function motivoParaNaoFechar({
   return null;
 }
 
-/**
- * Os serviços em seis blocos: as cinco categorias da aplicação mais um
- * para os sem categoria.
- *
- * Categoria fora da lista — possível, porque a coluna não tem `check`
- * (012) — cai no grupo sem categoria em vez de sumir da tela.
- */
-function gruposDeServico(servicos: ServicoCatalogo[]) {
-  const grupos = [
-    ...CATEGORIAS.map((categoria) => ({
-      chave: categoria as string,
-      rotulo: ROTULOS_CATEGORIA[categoria],
-    })),
-    { chave: SEM_CATEGORIA, rotulo: "Sem categoria" },
-  ];
-
-  return grupos
-    .map((grupo) => ({
-      ...grupo,
-      servicos: servicos.filter(
-        (servico) => chaveDeGrupo(servico.categoria) === grupo.chave,
-      ),
-    }))
-    .filter((grupo) => grupo.servicos.length > 0);
-}
-
-function chaveDeGrupo(categoria: string | null) {
-  return categoria &&
-    CATEGORIAS.includes(categoria as CategoriaServico)
-    ? categoria
-    : SEM_CATEGORIA;
-}
-
 /** Preço do catálogo no campo. Sem preço fica VAZIO, nunca "0,00". */
 function paraCampo(preco: number | null) {
   if (preco === null) return "";
@@ -575,84 +539,6 @@ function paraCampo(preco: number | null) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-/**
- * Um bloco de chips que abre e fecha.
- *
- * `<details>` nativo: abre sem JavaScript, e fechado ocupa uma linha. Os
- * 24 serviços abertos de uma vez são meia tela de rolagem antes do
- * primeiro campo de valor.
- */
-function Grupo({
-  rotulo,
-  escolhidos,
-  children,
-}: {
-  rotulo: string;
-  escolhidos: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <details className="group rounded-2xl border border-neutral-200 bg-white">
-      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 py-2 font-medium text-neutral-800 [&::-webkit-details-marker]:hidden">
-        <ChevronDown
-          aria-hidden="true"
-          className="size-5 shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
-        />
-
-        <span className="flex-1">{rotulo}</span>
-
-        {escolhidos > 0 && (
-          <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-medium text-white">
-            {escolhidos}
-          </span>
-        )}
-      </summary>
-
-      <div className="flex flex-wrap gap-2 px-3 pb-3">{children}</div>
-    </details>
-  );
-}
-
-function Chip({
-  nome,
-  marcado,
-  semPreco,
-  aoTocar,
-}: {
-  nome: string;
-  marcado: boolean;
-  semPreco: boolean;
-  aoTocar: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={aoTocar}
-      aria-pressed={marcado}
-      className={`flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium ${
-        marcado
-          ? "border-rose-600 bg-rose-600 text-white"
-          : "border-neutral-300 bg-white text-neutral-700 active:bg-neutral-100"
-      }`}
-    >
-      {marcado && <Check aria-hidden="true" className="size-4" />}
-      {nome}
-
-      {/* Entra na conta sem valor, e o valor é obrigatório para fechar:
-          o aviso vem antes de ela descobrir no botão desligado. */}
-      {semPreco && (
-        <span
-          className={`text-xs font-normal ${
-            marcado ? "text-rose-100" : "text-amber-700"
-          }`}
-        >
-          · sem preço
-        </span>
-      )}
-    </button>
-  );
 }
 
 /** Mais e menos, com alvo de 44px. Digitar número com uma mão é pior. */
