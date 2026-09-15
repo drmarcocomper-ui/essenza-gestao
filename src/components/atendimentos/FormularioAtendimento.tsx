@@ -2,9 +2,13 @@
 
 import { useActionState, useId, useState } from "react";
 import Link from "next/link";
-import { Check, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import type { EstadoAtendimento } from "@/app/(app)/clientes/[id]/atendimentos/actions";
+import {
+  ChipDeCatalogo,
+  GrupoDeChips,
+} from "@/components/atendimentos/ChipsDeCatalogo";
 import type { ServicoCatalogo } from "@/lib/atendimentos/consultas";
 import type { CampoAtendimento } from "@/lib/atendimentos/schema";
 import {
@@ -12,6 +16,7 @@ import {
   jaEscolhido as nomeJaEscolhido,
 } from "@/lib/atendimentos/servicos";
 import { hoje } from "@/lib/caixa/mes";
+import { agruparPorCategoria } from "@/lib/servicos/grupos";
 
 type Escolhido = {
   /** null = serviço confirmado como novo, que a action vai cadastrar. */
@@ -40,9 +45,10 @@ const classeCampo =
  * continua sendo lançado no Caixa, e as duas coisas não se cruzam nesta
  * fase.
  *
- * Os serviços são chips: o dedo escolhe, não digita. O que não estiver
- * no catálogo ela escreve uma vez e passa a aparecer como chip nos
- * próximos atendimentos.
+ * Os serviços são chips agrupados por categoria: o dedo escolhe, não
+ * digita. O que não estiver no catálogo ela escreve uma vez e passa a
+ * aparecer como chip nos próximos atendimentos — sem categoria, no bloco
+ * dos sem categoria, até ela precificar.
  */
 export default function FormularioAtendimento({
   acao,
@@ -64,6 +70,10 @@ export default function FormularioAtendimento({
   const valor = (campo: CampoAtendimento) => estado.valores?.[campo] ?? "";
 
   const avulsos = escolhidos.filter((servico) => servico.id === null);
+
+  /** Se este serviço do catálogo já está escolhido. */
+  const marcado = (id: string) =>
+    escolhidos.some((escolhido) => escolhido.id === id);
 
   function alternar(servico: ServicoCatalogo) {
     setEscolhidos((atuais) =>
@@ -173,44 +183,31 @@ export default function FormularioAtendimento({
           </p>
         )}
 
-        {servicos.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {servicos.map((servico) => {
-              const marcado = escolhidos.some(
-                (escolhido) => escolhido.id === servico.id,
-              );
-
-              return (
-                <button
+        {/* Agrupados por categoria, os mesmos blocos do fechamento da
+            conta: o catálogo inteiro aberto de uma vez é rolagem pura, e
+            é por esta tela que toda cliente passa. O badge conta o que
+            foi escolhido dentro do bloco fechado. */}
+        <div className="space-y-2">
+          {agruparPorCategoria(servicos).map((grupo) => (
+            <GrupoDeChips
+              key={grupo.chave || "sem-categoria"}
+              rotulo={grupo.rotulo}
+              escolhidos={
+                grupo.servicos.filter((servico) => marcado(servico.id)).length
+              }
+            >
+              {grupo.servicos.map((servico) => (
+                <ChipDeCatalogo
                   key={servico.id}
-                  type="button"
-                  onClick={() => alternar(servico)}
-                  aria-pressed={marcado}
-                  className={`flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium ${
-                    marcado
-                      ? "border-rose-600 bg-rose-600 text-white"
-                      : "border-neutral-300 bg-white text-neutral-700 active:bg-neutral-100"
-                  }`}
-                >
-                  {marcado && <Check aria-hidden="true" className="size-4" />}
-                  {servico.nome}
-
-                  {/* Nasceu numa tela destas e continua sem preço: é aqui
-                      que ela esbarra nele de novo para acertar. */}
-                  {servico.semPreco && (
-                    <span
-                      className={`text-xs font-normal ${
-                        marcado ? "text-rose-100" : "text-amber-700"
-                      }`}
-                    >
-                      · sem preço
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  nome={servico.nome}
+                  marcado={marcado(servico.id)}
+                  semPreco={servico.semPreco}
+                  aoTocar={() => alternar(servico)}
+                />
+              ))}
+            </GrupoDeChips>
+          ))}
+        </div>
 
         {avulsos.length > 0 && (
           <div className="flex flex-wrap gap-2">
