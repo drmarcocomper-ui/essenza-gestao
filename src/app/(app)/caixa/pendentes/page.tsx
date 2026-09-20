@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import BotaoMarcarPago from "@/components/caixa/BotaoMarcarPago";
+import ConfirmarRecebimento from "@/components/caixa/ConfirmarRecebimento";
 import { listarPendentes } from "@/lib/caixa/consultas";
 import { formatarData, formatarMoeda } from "@/lib/formatters";
 
@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   title: "A receber — Essenza",
 };
 
+/**
+ * A receber: o dinheiro vendido que ainda não caiu — quase tudo parcela
+ * de cartão esperando compensar.
+ *
+ * A data que aparece é a da VENDA. O app não prevê quando a parcela cai,
+ * nem mostra prazo estimado: quem informa o dia é ela, ao confirmar.
+ */
 export default async function PendentesPage() {
   const pendentes = await listarPendentes();
 
@@ -47,46 +54,56 @@ export default async function PendentesPage() {
           </section>
 
           {/* A view já entrega da mais antiga para a mais nova: é a ordem
-              em que ela vai cobrar. */}
+              em que as parcelas vão caindo. */}
           <ul className="space-y-2">
             {pendentes.map((pendente) => (
               <li
                 key={pendente.id}
                 className="space-y-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3"
               >
-                <div>
+                {/* O bloco inteiro abre a edição, como na lista do caixa —
+                    alvo grande, para usar de pé e com uma mão. */}
+                <Link
+                  href={`/caixa/${pendente.id}/editar`}
+                  className="block rounded-xl active:bg-neutral-50"
+                >
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm tabular-nums text-neutral-500">
-                      {formatarData(pendente.data_competencia)}
+                    <span className="text-sm text-neutral-500">
+                      Venda em{" "}
+                      <span className="tabular-nums">
+                        {formatarData(pendente.data_competencia)}
+                      </span>
                     </span>
                     <span className="font-semibold tabular-nums text-neutral-900">
                       {formatarMoeda(pendente.valor)}
                     </span>
                   </div>
 
+                  {/* Lançamento sem cliente é normal: nem toda entrada da
+                      planilha veio com a pessoa identificada. */}
                   <p className="mt-0.5 font-medium text-neutral-900">
                     {pendente.cliente ?? "Sem cliente"}
                   </p>
+
                   <p className="text-sm text-neutral-600">
                     {pendente.descricao}
                   </p>
-                </div>
 
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <BotaoMarcarPago
-                      id={pendente.id}
-                      descricao={pendente.descricao}
-                    />
-                  </div>
+                  {/* Sem isto, as três parcelas da mesma venda são linhas
+                      idênticas: mesmo nome, mesma data, mesmo valor. */}
+                  {pendente.parcelamento && (
+                    <p className="mt-1.5">
+                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                        Parcela {pendente.parcelamento}
+                      </span>
+                    </p>
+                  )}
+                </Link>
 
-                  <Link
-                    href={`/caixa/${pendente.id}/editar`}
-                    className="flex h-12 shrink-0 items-center justify-center rounded-xl border border-neutral-300 px-4 font-medium text-neutral-700 active:bg-neutral-100"
-                  >
-                    Abrir
-                  </Link>
-                </div>
+                <ConfirmarRecebimento
+                  id={pendente.id}
+                  descricao={pendente.descricao}
+                />
               </li>
             ))}
           </ul>

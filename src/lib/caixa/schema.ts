@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { hoje } from "@/lib/caixa/mes";
 import { moedaParaNumero } from "@/lib/formatters";
 
 /**
@@ -25,6 +26,25 @@ export type StatusLancamento = (typeof STATUS)[number];
 
 /** Teto de numeric(10,2). */
 const VALOR_MAXIMO = 99_999_999.99;
+
+export const MENSAGEM_DATA_FUTURA =
+  "A data não pode ser no futuro. Informe o dia em que o dinheiro caiu.";
+
+/**
+ * Regra do projeto (20/09/2026): nenhum lançamento fica `Pago` com
+ * `data_caixa` no futuro. Data de caixa é o dia em que o dinheiro andou,
+ * e dinheiro não anda amanhã — enquanto não caiu, o lançamento é Pendente.
+ *
+ * A trava definitiva é no banco e precisa de trigger: `check` não aceita
+ * `current_date`, que não é imutável. Enquanto ela não existe, quem
+ * garante a regra é a aplicação — aqui e na action.
+ *
+ * As duas datas estão em 'AAAA-MM-DD': comparar como texto é comparar
+ * como data, sem construir `Date`, que erraria o dia em fuso negativo.
+ */
+export function dataCaixaNoFuturo(data: string) {
+  return data > hoje();
+}
 
 /** Campo de texto opcional: string vazia vira null, não "". */
 const textoOpcional = (max: number) =>
@@ -141,6 +161,19 @@ export const lancamentoSchema = z
         message: "Lançamento pago precisa da data em que o dinheiro entrou",
       });
     }
+
+    // Pago é dinheiro que já andou: a data não pode ser no futuro.
+    if (
+      dados.status === "Pago" &&
+      dados.data_caixa &&
+      dataCaixaNoFuturo(dados.data_caixa)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["data_caixa"],
+        message: MENSAGEM_DATA_FUTURA,
+      });
+    }
   })
   .transform((dados) => ({
     ...dados,
@@ -157,6 +190,24 @@ export const lancamentoSchema = z
   }));
 
 export type DadosLancamento = z.infer<typeof lancamentoSchema>;
+
+/**
+ * Confirmação de recebimento: a parcela caiu, e ela informa em que dia.
+ *
+ * O app NUNCA prevê data de compensação — não calcula, não sugere, não
+ * deriva da venda. Este schema só confere o que ela digitou.
+ */
+export const confirmacaoRecebimentoSchema = z.object({
+  id: z.uuid({ message: "Lançamento inválido" }),
+
+  data_caixa: z
+    .string()
+    .trim()
+    .refine((v) => z.iso.date().safeParse(v).success, {
+      message: "Informe o dia em que o dinheiro caiu",
+    })
+    .refine((v) => !dataCaixaNoFuturo(v), { message: MENSAGEM_DATA_FUTURA }),
+});
 
 /** Os campos que o formulário conhece. `origem_registro` nunca entra. */
 export const CAMPOS_LANCAMENTO = [

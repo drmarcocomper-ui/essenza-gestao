@@ -60,6 +60,8 @@ export type Pendente = {
   // numeric no banco chega como número JSON, não string.
   valor: number;
   cliente: string | null;
+  /** "1/3", "2/3" — texto, como na planilha. Null fora de parcelamento. */
+  parcelamento: string | null;
 };
 
 export type Categoria = {
@@ -159,13 +161,19 @@ export async function contarPendentes(): Promise<number> {
   return count ?? 0;
 }
 
-/** A receber, da mais antiga para a mais nova — a fila de cobrança. */
+/**
+ * A receber, da mais antiga para a mais nova — a ordem em que as
+ * parcelas vão cair.
+ *
+ * `parcelamento` vem da migration 014: sem ele, as três parcelas da
+ * mesma venda são linhas idênticas na tela.
+ */
 export async function listarPendentes(): Promise<Pendente[]> {
   const { supabase } = await exigirSessao();
 
   const { data, error } = await supabase
     .from("vw_a_receber")
-    .select("id, data_competencia, descricao, valor, cliente")
+    .select("id, data_competencia, descricao, valor, cliente, parcelamento")
     // A view já ordena, mas ordenar aqui não depende disso.
     .order("data_competencia", { ascending: true });
 
