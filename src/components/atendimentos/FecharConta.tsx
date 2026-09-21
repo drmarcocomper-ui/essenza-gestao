@@ -10,13 +10,20 @@ import {
 } from "@/components/atendimentos/ChipsDeCatalogo";
 import {
   diferencaConta,
+  dividirEmParcelas,
+  emCentavos,
+  exigeModalidade,
   exigeTitularidade,
   formatarCentavos,
   INSTITUICOES,
+  MODALIDADES_CARTAO,
+  PARCELAS_MAXIMO,
+  ROTULO_MODALIDADE,
   TITULARIDADES_CONTA,
   totalItens,
   totalFormas,
   type Instituicao,
+  type ModalidadeCartao,
   type TitularidadeConta,
 } from "@/lib/atendimentos/conta";
 import type {
@@ -41,6 +48,10 @@ type LinhaForma = {
   chave: number;
   instituicao: Instituicao | "";
   titularidade: TitularidadeConta | "";
+  /** Crédito ou débito. Só a maquininha pergunta; nas outras fica "". */
+  modalidade: ModalidadeCartao | "";
+  /** Vezes no crédito. 1 em tudo que não é crédito parcelado. */
+  parcelas: number;
   valor: string;
 };
 
@@ -147,6 +158,8 @@ export default function FecharConta({
         chave: proximaChave.current++,
         instituicao: "",
         titularidade: "",
+        modalidade: "",
+        parcelas: 1,
         valor: falta > 0 ? mascararMoeda(String(falta)) : "",
       },
     ]);
@@ -196,6 +209,16 @@ export default function FecharConta({
             type="hidden"
             name="forma_titularidade"
             value={forma.titularidade}
+          />
+          <input
+            type="hidden"
+            name="forma_modalidade"
+            value={forma.modalidade}
+          />
+          <input
+            type="hidden"
+            name="forma_parcelas"
+            value={String(forma.parcelas)}
           />
           <input type="hidden" name="forma_valor" value={forma.valor} />
         </div>
@@ -347,9 +370,13 @@ export default function FecharConta({
                   onChange={(evento) =>
                     mudarForma(forma.chave, {
                       instituicao: evento.target.value as Instituicao | "",
-                      // Trocar a instituição joga fora a titularidade
-                      // antiga: ela era resposta de outra pergunta.
+                      // Trocar a instituição joga fora a titularidade e a
+                      // modalidade antigas: eram resposta de outra
+                      // pergunta, e parcelamento de maquininha não segue
+                      // para o Pix.
                       titularidade: "",
+                      modalidade: "",
+                      parcelas: 1,
                     })
                   }
                   className={`${classeCampo} flex-1`}
@@ -408,11 +435,59 @@ export default function FecharConta({
                 </div>
               )}
 
+              {/* Só na maquininha. É a única instituição que passa as
+                  duas coisas, e a única que não diz sozinha como o
+                  dinheiro andou. */}
+              {exigeModalidade(forma.instituicao) && (
+                <div
+                  role="group"
+                  aria-label={`Cartão na ${forma.instituicao}`}
+                  className="flex gap-2"
+                >
+                  {MODALIDADES_CARTAO.map((modalidade) => {
+                    const ativo = forma.modalidade === modalidade;
+
+                    return (
+                      <button
+                        key={modalidade}
+                        type="button"
+                        onClick={() =>
+                          mudarForma(forma.chave, {
+                            modalidade,
+                            // Débito não parcela: o número que ficou na
+                            // tela não pode sobreviver à troca.
+                            parcelas:
+                              modalidade === "credito" ? forma.parcelas : 1,
+                          })
+                        }
+                        aria-pressed={ativo}
+                        className={`h-11 flex-1 rounded-xl border font-medium ${
+                          ativo
+                            ? "border-rose-600 bg-rose-600 text-white"
+                            : "border-neutral-300 bg-white text-neutral-600 active:bg-neutral-100"
+                        }`}
+                      >
+                        {ROTULO_MODALIDADE[modalidade]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <CampoMoeda
                 rotulo="Valor desta forma de pagamento"
                 valor={forma.valor}
                 aoTrocar={(valor) => mudarForma(forma.chave, { valor })}
               />
+
+              {forma.modalidade === "credito" && (
+                <Parcelamento
+                  chave={forma.chave}
+                  parcelas={forma.parcelas}
+                  valor={forma.valor}
+                  aoTrocar={(parcelas) => mudarForma(forma.chave, { parcelas })}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -516,6 +591,14 @@ function motivoParaNaoFechar({
 
   if (semTitular) return `Diga se o ${semTitular.instituicao} é PF ou PJ.`;
 
+  const semModalidade = formas.find(
+    (forma) => exigeModalidade(forma.instituicao) && forma.modalidade === "",
+  );
+
+  if (semModalidade) {
+    return `Diga se o ${semModalidade.instituicao} foi crédito ou débito.`;
+  }
+
   if (formas.some((forma) => moedaParaNumero(forma.valor) === null)) {
     return "Falta o valor de uma forma de pagamento.";
   }
@@ -539,6 +622,85 @@ function paraCampo(preco: number | null) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/**
+ * Em quantas vezes ela passou no crédito.
+ *
+ * O resumo embaixo é o que ela confere em voz alta na frente da cliente
+ * — e é onde a sobra de centavo aparece, em vez de virar surpresa no
+ * extrato. Só aparece com valor digitado: "3× de R$ 0,00" leria como
+ * cortesia parcelada.
+ */
+function Parcelamento({
+  chave,
+  parcelas,
+  valor,
+  aoTrocar,
+}: {
+  chave: number;
+  parcelas: number;
+  valor: string;
+  aoTrocar: (parcelas: number) => void;
+}) {
+  const resumo = resumoDasParcelas(valor, parcelas);
+
+  return (
+    <div className="space-y-1">
+      <label
+        htmlFor={`parcelas-${chave}`}
+        className="block text-sm font-medium text-neutral-700"
+      >
+        Em quantas vezes
+      </label>
+
+      <select
+        id={`parcelas-${chave}`}
+        value={parcelas}
+        onChange={(evento) => aoTrocar(Number(evento.target.value))}
+        className={classeCampo}
+      >
+        {Array.from({ length: PARCELAS_MAXIMO }, (_, indice) => indice + 1).map(
+          (vezes) => (
+            <option key={vezes} value={vezes}>
+              {vezes === 1 ? "1× (à vista)" : `${vezes}×`}
+            </option>
+          ),
+        )}
+      </select>
+
+      {resumo && (
+        <p className="text-xs text-neutral-500 tabular-nums">{resumo}</p>
+      )}
+
+      {/* Por que o crédito não entra no Caixa hoje. Sem esta linha, a
+          conta some da lista do dia e parece que não foi gravada. */}
+      <p className="text-xs text-neutral-500">
+        O crédito cai depois.{" "}
+        {parcelas > 1 ? "As parcelas entram" : "A parcela entra"} em “A
+        receber”, e você confirma o dia em que o dinheiro cair.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * "3× de R$ 209,96, a última de R$ 209,98". Null quando não há o que
+ * dizer: sem valor, ou à vista.
+ */
+function resumoDasParcelas(valor: string, parcelas: number) {
+  const numero = moedaParaNumero(valor);
+
+  if (numero === null || parcelas < 2) return null;
+
+  const valores = dividirEmParcelas(numero, parcelas);
+  const primeira = emCentavos(valores[0]);
+  const ultima = emCentavos(valores[valores.length - 1]);
+  const texto = `${parcelas}× de ${formatarCentavos(primeira)}`;
+
+  return primeira === ultima
+    ? texto
+    : `${texto}, a última de ${formatarCentavos(ultima)}`;
 }
 
 /** Mais e menos, com alvo de 44px. Digitar número com uma mão é pior. */
