@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { dataCaixaNoFuturo, MENSAGEM_DATA_FUTURA } from "@/lib/caixa/schema";
 import { moedaParaNumero } from "@/lib/formatters";
 import { CATEGORIAS, type CategoriaServico } from "@/lib/servicos/schema";
 
@@ -296,6 +297,31 @@ export function parcelasDaForma(
   }));
 }
 
+/**
+ * Se a conta precisa da "Data do pagamento".
+ *
+ * A data só vira `data_caixa` de linha que nasce Paga — tudo menos
+ * crédito (ver `parcelasDaForma`). Conta 100% crédito não tem linha
+ * nenhuma que a use: perguntar faria ela preencher achando que está
+ * dizendo quando o dinheiro entrou, e não está.
+ *
+ * Forma ainda sem instituição, ou maquininha sem crédito/débito
+ * escolhido, conta como "entra hoje": a pergunta só some quando TODAS as
+ * formas estão confirmadas como crédito. Lista vazia também exige — não
+ * há o que afirmar, e o schema recusa conta sem forma de qualquer jeito.
+ *
+ * A tela e o schema chamam esta mesma função.
+ */
+export function exigeDataDePagamento(
+  formas: readonly { instituicao: string; modalidade: string | null }[],
+) {
+  if (formas.length === 0) return true;
+
+  return formas.some(
+    (forma) => modalidadeDe(forma.instituicao, forma.modalidade) !== "credito",
+  );
+}
+
 // ---------------------------------------------------------------------
 // Categoria e descrição do lançamento
 // ---------------------------------------------------------------------
@@ -549,18 +575,37 @@ export type FormaConta = z.infer<typeof formaContaSchema>;
 
 export const contaSchema = z
   .object({
-    data_caixa: z
-      .string()
-      .trim()
-      .refine((v) => z.iso.date().safeParse(v).success, {
-        message: "Informe a data em que o dinheiro entrou",
-      }),
+    /**
+     * Obrigatória só quando alguma forma nasce Paga — a regra é
+     * `exigeDataDePagamento`, conferida no `superRefine` porque depende
+     * das formas. Em conta 100% crédito a tela nem mostra o campo, e o
+     * que chegar aqui não alimenta linha nenhuma.
+     */
+    data_caixa: z.string().trim(),
 
     itens: z.array(itemContaSchema).min(1, "Escolha pelo menos um item"),
 
     formas: z.array(formaContaSchema).min(1, "Diga por onde ela pagou"),
   })
   .superRefine((conta, ctx) => {
+    if (exigeDataDePagamento(conta.formas)) {
+      if (!z.iso.date().safeParse(conta.data_caixa).success) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["data_caixa"],
+          message: "Informe a data em que o dinheiro entrou",
+        });
+      } else if (dataCaixaNoFuturo(conta.data_caixa)) {
+        // A mesma regra do Caixa: nenhum lançamento Pago com data de
+        // caixa no futuro. O `max` do campo é só a primeira camada.
+        ctx.addIssue({
+          code: "custom",
+          path: ["data_caixa"],
+          message: MENSAGEM_DATA_FUTURA,
+        });
+      }
+    }
+
     const resto = diferencaConta(
       conta.itens,
       conta.formas.map((forma) => ({ valor: forma.valor })),

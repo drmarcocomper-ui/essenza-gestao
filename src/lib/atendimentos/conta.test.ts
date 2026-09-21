@@ -7,6 +7,7 @@ import {
   diferencaConta,
   dividirEmParcelas,
   emCentavos,
+  exigeDataDePagamento,
   exigeModalidade,
   exigeTitularidade,
   formaContaSchema,
@@ -775,5 +776,80 @@ describe("conta parcelada inteira", () => {
         valor: "629,90",
       },
     ]);
+  });
+});
+
+describe("data do pagamento", () => {
+  const credito = { instituicao: "SumUp", modalidade: "credito" };
+  const debito = { instituicao: "SumUp", modalidade: "debito" };
+  const pix = { instituicao: "Nubank", modalidade: null };
+
+  it("conta 100% crédito não pede a data", () => {
+    expect(exigeDataDePagamento([credito])).toBe(false);
+    expect(exigeDataDePagamento([credito, credito])).toBe(false);
+  });
+
+  it("conta mista pede a data", () => {
+    expect(exigeDataDePagamento([credito, pix])).toBe(true);
+    expect(exigeDataDePagamento([debito, credito])).toBe(true);
+  });
+
+  it("conta sem crédito pede a data", () => {
+    expect(exigeDataDePagamento([pix])).toBe(true);
+    expect(exigeDataDePagamento([debito])).toBe(true);
+    expect(exigeDataDePagamento([{ instituicao: "Dinheiro", modalidade: null }])).toBe(true);
+  });
+
+  it("maquininha sem crédito/débito escolhido ainda pede", () => {
+    expect(exigeDataDePagamento([{ instituicao: "SumUp", modalidade: null }])).toBe(true);
+  });
+
+  it("modalidade fora da maquininha não conta como crédito", () => {
+    expect(exigeDataDePagamento([{ instituicao: "Nubank", modalidade: "credito" }])).toBe(true);
+  });
+
+  const itens = [
+    { tipo: "servico", refId: SERVICO, quantidade: "1", valorUnitario: "629,90" },
+  ];
+  const formaCredito = {
+    instituicao: "SumUp",
+    titularidade: "",
+    modalidade: "credito",
+    parcelas: "3",
+    valor: "629,90",
+  };
+
+  it("o schema fecha conta 100% crédito sem data", () => {
+    expect(
+      contaSchema.safeParse({ data_caixa: "", itens, formas: [formaCredito] })
+        .success,
+    ).toBe(true);
+  });
+
+  it("o schema exige a data quando há dinheiro entrando hoje", () => {
+    const saida = contaSchema.safeParse({
+      data_caixa: "",
+      itens,
+      formas: [
+        { ...formaCredito, valor: "500,00" },
+        { instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "129,90" },
+      ],
+    });
+
+    expect(saida.success).toBe(false);
+    expect(saida.error?.issues[0]?.path).toEqual(["data_caixa"]);
+  });
+
+  it("o schema recusa data no futuro para o que nasce Pago", () => {
+    const saida = contaSchema.safeParse({
+      data_caixa: "2999-01-01",
+      itens,
+      formas: [
+        { instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "629,90" },
+      ],
+    });
+
+    expect(saida.success).toBe(false);
+    expect(saida.error?.issues[0]?.path).toEqual(["data_caixa"]);
   });
 });

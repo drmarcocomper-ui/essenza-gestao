@@ -12,10 +12,12 @@ import {
   diferencaConta,
   dividirEmParcelas,
   emCentavos,
+  exigeDataDePagamento,
   exigeModalidade,
   exigeTitularidade,
   formatarCentavos,
   INSTITUICOES,
+  modalidadeDe,
   MODALIDADES_CARTAO,
   PARCELAS_MAXIMO,
   ROTULO_MODALIDADE,
@@ -112,6 +114,17 @@ export default function FecharConta({
   const total = totalItens(itensValorados);
   const pago = totalFormas(formasValoradas);
   const diferenca = diferencaConta(itensValorados, formasValoradas);
+
+  // A mesma regra que o schema usa no servidor. Em conta 100% crédito
+  // nenhuma linha nasce Paga, e a data não teria onde ser gravada.
+  const formasModalidade = formas.map((forma) => ({
+    instituicao: forma.instituicao,
+    modalidade: forma.modalidade || null,
+  }));
+  const pedeData = exigeDataDePagamento(formasModalidade);
+  const temCredito = formasModalidade.some(
+    (forma) => modalidadeDe(forma.instituicao, forma.modalidade) === "credito",
+  );
 
   const escolhido = (tipo: string, refId: string) =>
     linhas.some((linha) => linha.tipo === tipo && linha.refId === refId);
@@ -502,32 +515,49 @@ export default function FecharConta({
         </button>
       </section>
 
-      <div>
-        <label
-          htmlFor={idData}
-          className="mb-1.5 block text-sm font-medium text-neutral-700"
-        >
-          Data do pagamento <span className="text-rose-600">*</span>
-        </label>
+      {/* A data só vale para o que nasce Pago. Sem nada assim na conta,
+          o campo sai da tela — cinza ou opcional ainda pareceria que ela
+          está dizendo quando o dinheiro entrou. */}
+      {pedeData ? (
+        <div>
+          <label
+            htmlFor={idData}
+            className="mb-1.5 block text-sm font-medium text-neutral-700"
+          >
+            Data do pagamento (do que entrou hoje){" "}
+            <span className="text-rose-600">*</span>
+          </label>
 
-        <input
-          id={idData}
-          name="data_caixa"
-          type="date"
-          value={dataCaixa}
-          onChange={(evento) => setDataCaixa(evento.target.value)}
-          required
-          className={classeCampo}
-        />
+          <input
+            id={idData}
+            name="data_caixa"
+            type="date"
+            value={dataCaixa}
+            max={hoje()}
+            onChange={(evento) => setDataCaixa(evento.target.value)}
+            required
+            className={classeCampo}
+          />
 
-        <p className="mt-1 text-xs text-neutral-500">
-          Quando o dinheiro entrou. A competência é a data do atendimento.
+          {temCredito && (
+            <p className="mt-1 text-xs text-neutral-500">
+              As parcelas do crédito não usam esta data — você confirma cada
+              uma em A receber, no dia em que cair.
+            </p>
+          )}
+
+          {estado.erros?.data_caixa && (
+            <p className="mt-1 text-sm text-rose-700">
+              {estado.erros.data_caixa}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+          Nada entra no caixa hoje. As parcelas vão para A receber e você
+          confirma cada uma no dia em que cair.
         </p>
-
-        {estado.erros?.data_caixa && (
-          <p className="mt-1 text-sm text-rose-700">{estado.erros.data_caixa}</p>
-        )}
-      </div>
+      )}
 
       {/* O lugar onde ela confere antes de dizer o preço em voz alta. */}
       <section className="space-y-1 rounded-2xl border border-neutral-200 bg-white p-4">
@@ -629,8 +659,8 @@ function paraCampo(preco: number | null) {
  *
  * O resumo embaixo é o que ela confere em voz alta na frente da cliente
  * — e é onde a sobra de centavo aparece, em vez de virar surpresa no
- * extrato. Só aparece com valor digitado: "3× de R$ 0,00" leria como
- * cortesia parcelada.
+ * extrato. Parcelado, só aparece com valor digitado: "3× de R$ 0,00"
+ * leria como cortesia parcelada.
  */
 function Parcelamento({
   chave,
@@ -672,26 +702,27 @@ function Parcelamento({
       {resumo && (
         <p className="text-xs text-neutral-500 tabular-nums">{resumo}</p>
       )}
-
-      {/* Por que o crédito não entra no Caixa hoje. Sem esta linha, a
-          conta some da lista do dia e parece que não foi gravada. */}
-      <p className="text-xs text-neutral-500">
-        O crédito cai depois.{" "}
-        {parcelas > 1 ? "As parcelas entram" : "A parcela entra"} em “A
-        receber”, e você confirma o dia em que o dinheiro cair.
-      </p>
     </div>
   );
 }
 
 /**
- * "3× de R$ 209,96, a última de R$ 209,98". Null quando não há o que
- * dizer: sem valor, ou à vista.
+ * A linha embaixo do "Em quantas vezes".
+ *
+ * Parcelado: "3× de R$ 209,96 (última R$ 209,98)". Null sem valor
+ * digitado.
+ *
+ * À vista no crédito o dinheiro também não entra hoje, e é isso que a
+ * linha diz. Nenhuma data é calculada — quem informa o dia é ela.
  */
 function resumoDasParcelas(valor: string, parcelas: number) {
+  if (parcelas < 2) {
+    return "Entra em ~30 dias — você confirma em A receber.";
+  }
+
   const numero = moedaParaNumero(valor);
 
-  if (numero === null || parcelas < 2) return null;
+  if (numero === null) return null;
 
   const valores = dividirEmParcelas(numero, parcelas);
   const primeira = emCentavos(valores[0]);
@@ -700,7 +731,7 @@ function resumoDasParcelas(valor: string, parcelas: number) {
 
   return primeira === ultima
     ? texto
-    : `${texto}, a última de ${formatarCentavos(ultima)}`;
+    : `${texto} (última ${formatarCentavos(ultima)})`;
 }
 
 /** Mais e menos, com alvo de 44px. Digitar número com uma mão é pior. */
