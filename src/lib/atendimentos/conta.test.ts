@@ -5,11 +5,18 @@ import {
   contaSchema,
   descricaoDaConta,
   diferencaConta,
+  dividirEmParcelas,
+  emCentavos,
+  exigeModalidade,
   exigeTitularidade,
   formaContaSchema,
   FORMA_POR_INSTITUICAO,
+  FORMA_POR_MODALIDADE,
   itemContaSchema,
   lerConta,
+  modalidadeDe,
+  parcelasDaForma,
+  PARCELAS_MAXIMO,
   titularidadeDe,
   totalItens,
 } from "@/lib/atendimentos/conta";
@@ -105,6 +112,8 @@ describe("titularidade", () => {
     const erro = formaContaSchema.safeParse({
       instituicao: "Nubank",
       titularidade: "",
+      modalidade: "",
+      parcelas: "1",
       valor: "480,00",
     });
 
@@ -116,6 +125,8 @@ describe("titularidade", () => {
     const forma = formaContaSchema.parse({
       instituicao: "Dinheiro",
       titularidade: "",
+      modalidade: "",
+      parcelas: "1",
       valor: "480,00",
     });
 
@@ -127,6 +138,8 @@ describe("titularidade", () => {
       formaContaSchema.safeParse({
         instituicao: "Stone",
         titularidade: "",
+        modalidade: "",
+        parcelas: "1",
         valor: "10,00",
       }).success,
     ).toBe(false);
@@ -356,8 +369,20 @@ describe("conta inteira", () => {
       data_caixa: "2026-09-14",
       itens,
       formas: [
-        { instituicao: "SumUp", titularidade: "", valor: "300,00" },
-        { instituicao: "Nubank", titularidade: "PF", valor: "180,00" },
+        {
+          instituicao: "SumUp",
+          titularidade: "",
+          modalidade: "debito",
+          parcelas: "1",
+          valor: "300,00",
+        },
+        {
+          instituicao: "Nubank",
+          titularidade: "PF",
+          modalidade: "",
+          parcelas: "1",
+          valor: "180,00",
+        },
       ],
     });
 
@@ -370,7 +395,7 @@ describe("conta inteira", () => {
     const saida = contaSchema.safeParse({
       data_caixa: "2026-09-14",
       itens,
-      formas: [{ instituicao: "Dinheiro", titularidade: "", valor: "400,00" }],
+      formas: [{ instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "400,00" }],
     });
 
     expect(saida.success).toBe(false);
@@ -382,7 +407,7 @@ describe("conta inteira", () => {
     const saida = contaSchema.safeParse({
       data_caixa: "2026-09-14",
       itens,
-      formas: [{ instituicao: "Dinheiro", titularidade: "", valor: "500,00" }],
+      formas: [{ instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "500,00" }],
     });
 
     expect(saida.success).toBe(false);
@@ -394,7 +419,7 @@ describe("conta inteira", () => {
       contaSchema.safeParse({
         data_caixa: "2026-09-14",
         itens: [],
-        formas: [{ instituicao: "Dinheiro", titularidade: "", valor: "0,00" }],
+        formas: [{ instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "0,00" }],
       }).success,
     ).toBe(false);
   });
@@ -411,7 +436,7 @@ describe("conta inteira", () => {
       contaSchema.safeParse({
         data_caixa: "",
         itens,
-        formas: [{ instituicao: "Dinheiro", titularidade: "", valor: "480,00" }],
+        formas: [{ instituicao: "Dinheiro", titularidade: "", modalidade: "", parcelas: "1", valor: "480,00" }],
       }).success,
     ).toBe(false);
   });
@@ -435,6 +460,8 @@ describe("leitura do formulário", () => {
 
     formData.append("forma_instituicao", "Nubank");
     formData.append("forma_titularidade", "PJ");
+    formData.append("forma_modalidade", "");
+    formData.append("forma_parcelas", "1");
     formData.append("forma_valor", "480,00");
 
     const conta = lerConta(formData);
@@ -447,8 +474,306 @@ describe("leitura do formulário", () => {
       valorUnitario: "65,00",
     });
     expect(conta.formas).toEqual([
-      { instituicao: "Nubank", titularidade: "PJ", valor: "480,00" },
+      {
+        instituicao: "Nubank",
+        titularidade: "PJ",
+        modalidade: "",
+        parcelas: "1",
+        valor: "480,00",
+      },
     ]);
     expect(contaSchema.safeParse(conta).success).toBe(true);
+  });
+});
+
+describe("divisão em parcelas", () => {
+  /** A regra que nenhum arredondamento pode quebrar. */
+  const soma = (valores: number[]) =>
+    valores.reduce((total, valor) => total + emCentavos(valor), 0);
+
+  it("divide exato quando divide exato", () => {
+    expect(dividirEmParcelas(300, 3)).toEqual([100, 100, 100]);
+  });
+
+  it("629,90 em 3x: a sobra de centavo vai na última", () => {
+    expect(dividirEmParcelas(629.9, 3)).toEqual([209.96, 209.96, 209.98]);
+    expect(soma(dividirEmParcelas(629.9, 3))).toBe(62_990);
+  });
+
+  it("uma parcela é o valor inteiro", () => {
+    expect(dividirEmParcelas(629.9, 1)).toEqual([629.9]);
+  });
+
+  it("dois centavos de sobra também vão todos na última", () => {
+    // 100,00 em 3x: 33,33 + 33,33 + 33,34.
+    expect(dividirEmParcelas(100, 3)).toEqual([33.33, 33.33, 33.34]);
+  });
+
+  it("a soma bate com o valor em qualquer divisão até o teto", () => {
+    for (const valor of [0.03, 10, 629.9, 481.37, 1000.01, 99.99]) {
+      for (let vezes = 1; vezes <= PARCELAS_MAXIMO; vezes++) {
+        expect(soma(dividirEmParcelas(valor, vezes))).toBe(emCentavos(valor));
+      }
+    }
+  });
+
+  it("valor menor que o número de parcelas não some nem estoura", () => {
+    // 0,02 em 3x: duas de zero e uma de dois centavos. Continua somando.
+    expect(dividirEmParcelas(0.02, 3)).toEqual([0, 0, 0.02]);
+  });
+});
+
+describe("modalidade da maquininha", () => {
+  it("é perguntada só na SumUp", () => {
+    expect(exigeModalidade("SumUp")).toBe(true);
+
+    for (const outra of [
+      "Nubank",
+      "PicPay",
+      "Dinheiro",
+      "Terceiro",
+      "Cortesia",
+    ]) {
+      expect(exigeModalidade(outra)).toBe(false);
+    }
+  });
+
+  it("grava null fora da maquininha, mesmo se a tela mandar valor", () => {
+    expect(modalidadeDe("Nubank", "credito")).toBeNull();
+    expect(modalidadeDe("Dinheiro", "debito")).toBeNull();
+  });
+
+  it("recusa valor fora das duas modalidades", () => {
+    expect(modalidadeDe("SumUp", "parcelado")).toBeNull();
+    expect(modalidadeDe("SumUp", null)).toBeNull();
+  });
+
+  it("as duas traduções existem no check da coluna (002)", () => {
+    for (const forma of Object.values(FORMA_POR_MODALIDADE)) {
+      expect(FORMAS_PAGAMENTO).toContain(forma);
+    }
+  });
+
+  it("a forma na SumUp não passa sem crédito ou débito", () => {
+    const saida = formaContaSchema.safeParse({
+      instituicao: "SumUp",
+      titularidade: "",
+      modalidade: "",
+      parcelas: "1",
+      valor: "629,90",
+    });
+
+    expect(saida.success).toBe(false);
+    expect(saida.error?.issues[0]?.path).toEqual(["modalidade"]);
+  });
+
+  it("parcelamento escolhido fora do crédito não sobrevive ao parse", () => {
+    const forma = formaContaSchema.parse({
+      instituicao: "SumUp",
+      titularidade: "",
+      modalidade: "debito",
+      parcelas: "4",
+      valor: "629,90",
+    });
+
+    expect(forma).toMatchObject({ modalidade: "debito", parcelas: 1 });
+  });
+
+  it("recusa parcelamento acima do teto", () => {
+    expect(
+      formaContaSchema.safeParse({
+        instituicao: "SumUp",
+        titularidade: "",
+        modalidade: "credito",
+        parcelas: String(PARCELAS_MAXIMO + 1),
+        valor: "629,90",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("lançamentos de uma forma de pagamento", () => {
+  const CAIXA = "2026-09-14";
+
+  const sumup = (
+    modalidade: "credito" | "debito",
+    parcelas: number,
+    valor: number,
+  ) =>
+    parcelasDaForma({ instituicao: "SumUp", modalidade, parcelas, valor }, CAIXA);
+
+  it("débito nasce Pago, com a data que a tela perguntou", () => {
+    expect(sumup("debito", 1, 629.9)).toEqual([
+      {
+        forma_pagamento: "Cartão de débito",
+        status: "Pago",
+        data_caixa: CAIXA,
+        parcelamento: null,
+        valor: 629.9,
+      },
+    ]);
+  });
+
+  it("crédito em 1x já nasce Pendente e sem data: cai em ~30 dias", () => {
+    expect(sumup("credito", 1, 629.9)).toEqual([
+      {
+        forma_pagamento: "Cartão de crédito",
+        status: "Pendente",
+        data_caixa: null,
+        // 1x não leva rótulo: "1/1" afirmaria parcelamento que não houve.
+        parcelamento: null,
+        valor: 629.9,
+      },
+    ]);
+  });
+
+  it("629,90 em 3x vira três pendências rotuladas n/N", () => {
+    const parcelas = sumup("credito", 3, 629.9);
+
+    expect(parcelas.map((p) => p.parcelamento)).toEqual(["1/3", "2/3", "3/3"]);
+    expect(parcelas.map((p) => p.valor)).toEqual([209.96, 209.96, 209.98]);
+    expect(parcelas.every((p) => p.status === "Pendente")).toBe(true);
+    // Inclusive a primeira: nenhuma parcela de crédito nasce com data.
+    expect(parcelas.every((p) => p.data_caixa === null)).toBe(true);
+  });
+
+  it("a primeira parcela de crédito não nasce Paga nem por engano", () => {
+    expect(sumup("credito", 4, 1200)[0]).toMatchObject({
+      status: "Pendente",
+      data_caixa: null,
+      parcelamento: "1/4",
+    });
+  });
+
+  it("fora da maquininha segue como era: uma linha, Paga", () => {
+    expect(
+      parcelasDaForma(
+        { instituicao: "Dinheiro", modalidade: null, parcelas: 1, valor: 480 },
+        CAIXA,
+      ),
+    ).toEqual([
+      {
+        forma_pagamento: "Dinheiro",
+        status: "Pago",
+        data_caixa: CAIXA,
+        parcelamento: null,
+        valor: 480,
+      },
+    ]);
+  });
+
+  it("instituição que não diz como o dinheiro andou continua sem forma", () => {
+    expect(
+      parcelasDaForma(
+        { instituicao: "Nubank", modalidade: null, parcelas: 1, valor: 480 },
+        CAIXA,
+      )[0]?.forma_pagamento,
+    ).toBeNull();
+  });
+});
+
+describe("conta parcelada inteira", () => {
+  const itens = [
+    {
+      tipo: "servico",
+      refId: SERVICO,
+      quantidade: "1",
+      valorUnitario: "629,90",
+    },
+  ];
+
+  it("fecha: o total confere com o VALOR DA FORMA, não com as parcelas", () => {
+    // A trava de total olha os 629,90 da forma. Se olhasse as parcelas
+    // arredondadas, uma conta legítima seria recusada por um centavo.
+    const saida = contaSchema.safeParse({
+      data_caixa: "2026-09-14",
+      itens,
+      formas: [
+        {
+          instituicao: "SumUp",
+          titularidade: "",
+          modalidade: "credito",
+          parcelas: "3",
+          valor: "629,90",
+        },
+      ],
+    });
+
+    expect(saida.success).toBe(true);
+    expect(saida.data?.formas[0]).toMatchObject({
+      modalidade: "credito",
+      parcelas: 3,
+      // A maquininha é do CNPJ: titularidade conhecida, não perguntada.
+      titularidade: "PJ",
+    });
+  });
+
+  it("conta mista gera o Pago do dinheiro e as pendências do crédito", () => {
+    const conta = contaSchema.parse({
+      data_caixa: "2026-09-14",
+      itens,
+      formas: [
+        {
+          instituicao: "Dinheiro",
+          titularidade: "",
+          modalidade: "",
+          parcelas: "1",
+          valor: "129,90",
+        },
+        {
+          instituicao: "SumUp",
+          titularidade: "",
+          modalidade: "credito",
+          parcelas: "2",
+          valor: "500,00",
+        },
+      ],
+    });
+
+    const linhas = conta.formas.flatMap((forma) =>
+      parcelasDaForma(forma, conta.data_caixa),
+    );
+
+    expect(linhas).toHaveLength(3);
+    expect(linhas.map((linha) => linha.status)).toEqual([
+      "Pago",
+      "Pendente",
+      "Pendente",
+    ]);
+    expect(linhas.map((linha) => linha.parcelamento)).toEqual([
+      null,
+      "1/2",
+      "2/2",
+    ]);
+    // O dinheiro gravado soma exatamente o que ela cobrou.
+    expect(
+      linhas.reduce((soma, linha) => soma + emCentavos(linha.valor), 0),
+    ).toBe(62_990);
+  });
+
+  it("a leitura do formulário carrega modalidade e parcelas", () => {
+    const formData = new FormData();
+
+    formData.set("data_caixa", "2026-09-14");
+    formData.append("item_tipo", "servico");
+    formData.append("item_ref", SERVICO);
+    formData.append("item_quantidade", "1");
+    formData.append("item_valor", "629,90");
+
+    formData.append("forma_instituicao", "SumUp");
+    formData.append("forma_titularidade", "");
+    formData.append("forma_modalidade", "credito");
+    formData.append("forma_parcelas", "3");
+    formData.append("forma_valor", "629,90");
+
+    expect(lerConta(formData).formas).toEqual([
+      {
+        instituicao: "SumUp",
+        titularidade: "",
+        modalidade: "credito",
+        parcelas: "3",
+        valor: "629,90",
+      },
+    ]);
   });
 });

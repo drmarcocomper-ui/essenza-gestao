@@ -99,6 +99,61 @@ export const FORMA_POR_INSTITUICAO: Partial<Record<Instituicao, string>> = {
 };
 
 // ---------------------------------------------------------------------
+// A maquininha
+// ---------------------------------------------------------------------
+
+/**
+ * A SumUp é a única instituição que não diz sozinha como o dinheiro
+ * andou: é maquininha, e passa crédito e débito. Nas outras cinco a
+ * pergunta não existe e nada é gravado por acidente.
+ */
+export const INSTITUICAO_MAQUININHA = "SumUp";
+
+export const MODALIDADES_CARTAO = ["credito", "debito"] as const;
+
+export type ModalidadeCartao = (typeof MODALIDADES_CARTAO)[number];
+
+/** O rótulo de cada modalidade na tela. */
+export const ROTULO_MODALIDADE: Record<ModalidadeCartao, string> = {
+  credito: "Crédito",
+  debito: "Débito",
+};
+
+/**
+ * Modalidade para `lancamentos.forma_pagamento`. Os dois textos já
+ * existem no `check` da coluna (002) e no histórico importado — nenhum
+ * valor novo é inventado aqui.
+ */
+export const FORMA_POR_MODALIDADE: Record<ModalidadeCartao, string> = {
+  credito: "Cartão de crédito",
+  debito: "Cartão de débito",
+};
+
+/**
+ * Teto de parcelas. O histórico dela vai até 4; 12 é o que a maquininha
+ * oferece, e recusar 6x por falta de opção seria a tela mentindo sobre
+ * o que aconteceu no balcão.
+ */
+export const PARCELAS_MAXIMO = 12;
+
+/** Se a tela precisa perguntar crédito ou débito. */
+export function exigeModalidade(instituicao: string) {
+  return instituicao === INSTITUICAO_MAQUININHA;
+}
+
+/** A modalidade que vai para o banco. Fora da maquininha é sempre null. */
+export function modalidadeDe(
+  instituicao: string,
+  escolhida: string | null,
+): ModalidadeCartao | null {
+  if (!exigeModalidade(instituicao)) return null;
+
+  return MODALIDADES_CARTAO.includes(escolhida as ModalidadeCartao)
+    ? (escolhida as ModalidadeCartao)
+    : null;
+}
+
+// ---------------------------------------------------------------------
 // Soma
 // ---------------------------------------------------------------------
 
@@ -151,6 +206,94 @@ export function formatarCentavos(centavos: number) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+// ---------------------------------------------------------------------
+// Parcelamento
+// ---------------------------------------------------------------------
+
+/**
+ * O valor de uma forma dividido em N parcelas, em REAIS, na ordem.
+ *
+ * Partes iguais, e A SOBRA DE CENTAVO VAI NA ÚLTIMA. A soma das N
+ * parcelas bate exatamente com o valor da forma — é o que mantém o
+ * Caixa fechando com o que ela cobrou, e o que impede a própria
+ * validação de total de recusar depois uma conta legítima.
+ *
+ * 629,90 em 3x sai 209,96 + 209,96 + 209,98. Dividir "certinho" daria
+ * 209,9666… e três parcelas de 209,97 somariam 629,91 — um centavo a
+ * mais do que passou na maquininha.
+ *
+ * A divisão é feita em centavos inteiros: 629,90 / 3 em ponto flutuante
+ * não tem resposta exata, e a sobra não seria contável.
+ */
+export function dividirEmParcelas(valor: number, parcelas: number) {
+  const vezes = Math.max(1, Math.trunc(parcelas));
+  const total = emCentavos(valor);
+  const base = Math.trunc(total / vezes);
+  const sobra = total - base * vezes;
+
+  return Array.from({ length: vezes }, (_, indice) =>
+    emReais(indice === vezes - 1 ? base + sobra : base),
+  );
+}
+
+/** O rótulo da parcela. Null em 1x: "1/1" afirmaria parcelamento que não houve. */
+export function rotuloParcela(indice: number, parcelas: number) {
+  return parcelas > 1 ? `${indice + 1}/${parcelas}` : null;
+}
+
+/** Uma linha de `lancamentos`, na parte que o parcelamento decide. */
+export type ParcelaConta = {
+  forma_pagamento: string | null;
+  status: "Pago" | "Pendente";
+  data_caixa: string | null;
+  parcelamento: string | null;
+  valor: number;
+};
+
+/**
+ * As linhas de `lancamentos` que uma forma de pagamento gera.
+ *
+ * Uma por parcela, todas do mesmo atendimento — é o `atendimento_id`
+ * que amarra as parcelas entre si, não existe coluna de vínculo.
+ *
+ * CRÉDITO NASCE PENDENTE E SEM DATA DE CAIXA, inclusive a primeira
+ * parcela e inclusive em 1x: o crédito cai em torno de trinta dias, não
+ * hoje. Dizer o contrário encheria o resumo de caixa de dinheiro que
+ * ainda não existe na conta dela. A data de cada parcela entra depois,
+ * em "A receber", no dia em que ela vê o dinheiro cair — o app NUNCA
+ * prevê data de compensação.
+ *
+ * Débito e as demais instituições continuam nascendo Pagas, com a data
+ * que a tela perguntou.
+ */
+export function parcelasDaForma(
+  forma: {
+    instituicao: string;
+    modalidade: ModalidadeCartao | null;
+    parcelas: number;
+    valor: number;
+  },
+  dataCaixa: string,
+): ParcelaConta[] {
+  const credito = forma.modalidade === "credito";
+  const vezes = credito
+    ? Math.min(Math.max(1, Math.trunc(forma.parcelas)), PARCELAS_MAXIMO)
+    : 1;
+
+  const forma_pagamento = forma.modalidade
+    ? FORMA_POR_MODALIDADE[forma.modalidade]
+    : (FORMA_POR_INSTITUICAO[forma.instituicao as Instituicao] ?? null);
+
+  return dividirEmParcelas(forma.valor, vezes).map((valor, indice) => ({
+    forma_pagamento,
+    status: credito ? "Pendente" : "Pago",
+    // `chk_lancamento_caixa` (002) só exige data quando o status é Pago.
+    data_caixa: credito ? null : dataCaixa,
+    parcelamento: rotuloParcela(indice, vezes),
+    valor,
+  }));
 }
 
 // ---------------------------------------------------------------------
@@ -329,6 +472,37 @@ export const formaContaSchema = z
       .trim()
       .transform((v) => (v === "" ? null : v))
       .nullable(),
+
+    /** Crédito ou débito. Só a maquininha manda isto preenchido. */
+    modalidade: z
+      .string()
+      .trim()
+      .transform((v) => (v === "" ? null : v))
+      .nullable(),
+
+    /**
+     * Vezes na maquininha. Chega como texto do campo escondido; vazio é
+     * 1, que é a conta da maioria das vezes.
+     */
+    parcelas: z.string().transform((bruto, ctx) => {
+      const texto = bruto.trim();
+
+      if (texto === "") return 1;
+
+      const numero = Number(texto);
+
+      if (!Number.isInteger(numero) || numero < 1 || numero > PARCELAS_MAXIMO) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Parcele em até ${PARCELAS_MAXIMO} vezes.`,
+        });
+
+        return z.NEVER;
+      }
+
+      return numero;
+    }),
+
     valor: valorObrigatorio,
   })
   .superRefine((forma, ctx) => {
@@ -343,13 +517,33 @@ export const formaContaSchema = z
         message: `Diga se o ${forma.instituicao} é PF ou PJ.`,
       });
     }
+
+    if (
+      exigeModalidade(forma.instituicao) &&
+      modalidadeDe(forma.instituicao, forma.modalidade) === null
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["modalidade"],
+        message: `Diga se o ${forma.instituicao} foi crédito ou débito.`,
+      });
+    }
   })
-  .transform((forma) => ({
-    ...forma,
-    // O que a tela não perguntou não vai para o banco por acidente: a
-    // titularidade é recalculada a partir da instituição.
-    titularidade: titularidadeDe(forma.instituicao, forma.titularidade),
-  }));
+  .transform((forma) => {
+    const modalidade = modalidadeDe(forma.instituicao, forma.modalidade);
+
+    return {
+      ...forma,
+      // O que a tela não perguntou não vai para o banco por acidente: a
+      // titularidade e a modalidade são recalculadas a partir da
+      // instituição.
+      titularidade: titularidadeDe(forma.instituicao, forma.titularidade),
+      modalidade,
+      // Parcela só existe em crédito. Débito, Pix e dinheiro são uma
+      // linha só, e o número que ficou na tela não pode vazar para lá.
+      parcelas: modalidade === "credito" ? forma.parcelas : 1,
+    };
+  });
 
 export type FormaConta = z.infer<typeof formaContaSchema>;
 
@@ -419,6 +613,8 @@ export function lerConta(formData: FormData) {
 
   const instituicoes = formData.getAll("forma_instituicao").map(String);
   const titularidades = formData.getAll("forma_titularidade").map(String);
+  const modalidades = formData.getAll("forma_modalidade").map(String);
+  const parcelas = formData.getAll("forma_parcelas").map(String);
   const valoresForma = formData.getAll("forma_valor").map(String);
 
   return {
@@ -432,6 +628,8 @@ export function lerConta(formData: FormData) {
     formas: instituicoes.map((instituicao, indice) => ({
       instituicao,
       titularidade: titularidades[indice] ?? "",
+      modalidade: modalidades[indice] ?? "",
+      parcelas: parcelas[indice] ?? "",
       valor: valoresForma[indice] ?? "",
     })),
   };
