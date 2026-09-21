@@ -7,10 +7,9 @@ import {
   contaSchema,
   descricaoDaConta,
   errosDaConta,
-  FORMA_POR_INSTITUICAO,
   lerConta,
+  parcelasDaForma,
   type CampoConta,
-  type Instituicao,
 } from "@/lib/atendimentos/conta";
 import {
   listarProdutosRevenda,
@@ -192,33 +191,40 @@ export async function fecharConta(
     return { mensagem: classificarFalhaConta("itens", erroItens).texto };
   }
 
-  // (c) — o dinheiro por último. Um lançamento por forma de pagamento,
-  // cada um com sua instituição e titularidade.
+  // (c) — o dinheiro por último. Um lançamento por PARCELA de cada forma
+  // de pagamento: a conta paga em 3x no crédito grava três linhas, todas
+  // com este `atendimento_id` e a mesma competência. É o
+  // `atendimento_id` que amarra as parcelas entre si — não existe coluna
+  // de vínculo, e não precisa: a conta é o vínculo.
   const { error: erroLancamentos } = await supabase.from("lancamentos").insert(
-    conta.formas.map((forma) => ({
-      // Competência é a data do atendimento; caixa é a data do pagamento.
-      data_competencia: atendimento.data,
-      data_caixa: conta.data_caixa,
-      // Status 'Pago' exige data de caixa (chk_lancamento_caixa), que
-      // sempre existe aqui — a tela pergunta e o schema obriga.
-      status: "Pago",
-      tipo: "Entrada",
-      categoria: categoriaDaConta(classificaveis),
-      descricao: descricaoDaConta(itens),
-      cliente_id: clienteId,
-      atendimento_id: atendimentoId,
-      forma_pagamento:
-        FORMA_POR_INSTITUICAO[forma.instituicao as Instituicao] ?? null,
-      instituicao: forma.instituicao,
-      titularidade: forma.titularidade,
-      valor: forma.valor,
-      // A mesma coluna que a planilha preenchia, para os relatórios por
-      // mês continuarem batendo com o histórico importado.
-      mes_competencia: atendimento.data.slice(0, 7),
-      // `origem_registro` fica no default 'app'. `parcelamento` fica
-      // null: a decisão de parcelamento ainda não foi tomada, e campo
-      // preenchido por adivinhação é pior que campo vazio.
-    })),
+    conta.formas.flatMap((forma) =>
+      parcelasDaForma(forma, conta.data_caixa).map((parcela) => ({
+        // Competência é a data do atendimento, igual em todas as
+        // parcelas: o serviço foi prestado num dia só.
+        data_competencia: atendimento.data,
+        // Crédito nasce Pendente e sem data de caixa, inclusive a
+        // primeira parcela — ela confirma cada uma em "A receber", no dia
+        // em que o dinheiro cai. O resto nasce Pago com a data da tela.
+        data_caixa: parcela.data_caixa,
+        status: parcela.status,
+        tipo: "Entrada",
+        categoria: categoriaDaConta(classificaveis),
+        descricao: descricaoDaConta(itens),
+        cliente_id: clienteId,
+        atendimento_id: atendimentoId,
+        forma_pagamento: parcela.forma_pagamento,
+        instituicao: forma.instituicao,
+        titularidade: forma.titularidade,
+        // 'n/N' quando parcelou de verdade; null em 1x, porque "1/1"
+        // afirmaria um parcelamento que não houve.
+        parcelamento: parcela.parcelamento,
+        valor: parcela.valor,
+        // A mesma coluna que a planilha preenchia, para os relatórios por
+        // mês continuarem batendo com o histórico importado.
+        mes_competencia: atendimento.data.slice(0, 7),
+        // `origem_registro` fica no default 'app'.
+      })),
+    ),
   );
 
   if (erroLancamentos) {
