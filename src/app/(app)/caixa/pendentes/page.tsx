@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
+import ChipParcela from "@/components/caixa/ChipParcela";
 import ConfirmarRecebimento from "@/components/caixa/ConfirmarRecebimento";
 import { listarPendentes } from "@/lib/caixa/consultas";
 import { formatarData, formatarMoeda } from "@/lib/formatters";
@@ -89,15 +90,10 @@ export default async function PendentesPage() {
                     {pendente.descricao}
                   </p>
 
-                  {/* Sem isto, as três parcelas da mesma venda são linhas
-                      idênticas: mesmo nome, mesma data, mesmo valor. */}
-                  {pendente.parcelamento && (
-                    <p className="mt-1.5">
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                        Parcela {pendente.parcelamento}
-                      </span>
-                    </p>
-                  )}
+                  <ChipParcela
+                    parcelamento={pendente.parcelamento}
+                    className="mt-1.5"
+                  />
                 </Link>
 
                 <ConfirmarRecebimento

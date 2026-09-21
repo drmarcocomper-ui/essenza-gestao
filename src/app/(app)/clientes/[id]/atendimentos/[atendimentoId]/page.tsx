@@ -7,6 +7,7 @@ import { fecharConta } from "@/app/(app)/clientes/[id]/atendimentos/[atendimento
 import FecharConta, {
   type LinhaItem,
 } from "@/components/atendimentos/FecharConta";
+import ChipParcela from "@/components/caixa/ChipParcela";
 import { emCentavos, totalLinha } from "@/lib/atendimentos/conta";
 import {
   listarProdutosRevenda,
@@ -15,7 +16,7 @@ import {
   type AtendimentoDetalhe,
 } from "@/lib/atendimentos/consultas";
 import { obterCliente } from "@/lib/clientes/consultas";
-import { formatarData, formatarMoeda } from "@/lib/formatters";
+import { formatarData, formatarDiaMes, formatarMoeda } from "@/lib/formatters";
 
 export async function generateMetadata({
   params,
@@ -219,11 +220,23 @@ function ContaFechada({ atendimento }: { atendimento: AtendimentoDetalhe }) {
                 </span>
               )}
 
-              {forma.dataCaixa && (
-                <span className="block text-xs text-neutral-500 tabular-nums">
-                  {formatarData(forma.dataCaixa)}
-                </span>
-              )}
+              {/* Parcela e estado de cada linha: sem eles, "SumUp · PJ ·
+                  R$ 209,96" três vezes não diz que são 1/3, 2/3 e 3/3,
+                  nem que ainda não entraram. Pendente não mostra data
+                  nenhuma — o app não prevê quando o crédito cai. */}
+              <span className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                <ChipParcela parcelamento={forma.parcelamento} />
+
+                {forma.status === "Pendente" ? (
+                  <span className="font-medium text-amber-700">A receber</span>
+                ) : (
+                  forma.dataCaixa && (
+                    <span className="text-neutral-500 tabular-nums">
+                      Recebido em {formatarDiaMes(forma.dataCaixa)}
+                    </span>
+                  )
+                )}
+              </span>
             </span>
 
             <span className="shrink-0 text-neutral-900 tabular-nums">

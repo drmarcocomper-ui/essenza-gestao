@@ -1,4 +1,5 @@
 import { exigirSessao } from "@/lib/auth";
+import { compararPorParcela } from "@/lib/caixa/parcela";
 
 export type ServicoCatalogo = {
   id: string;
@@ -77,6 +78,10 @@ export type FormaDaConta = {
   titularidade: string | null;
   valor: number;
   dataCaixa: string | null;
+  /** Pendente é crédito que ainda não caiu; Pago já entrou no caixa. */
+  status: "Pago" | "Pendente";
+  /** "1/3" em crédito parcelado. Texto cru: ver `lerParcela`. */
+  parcelamento: string | null;
 };
 
 export type AtendimentoDetalhe = {
@@ -248,7 +253,7 @@ export async function obterAtendimento(
   const { data, error } = await supabase
     .from("atendimentos")
     .select(
-      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa), formulas(id)",
+      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa, status, parcelamento), formulas(id)",
     )
     .eq("id", atendimentoId)
     .eq("cliente_id", clienteId)
@@ -282,6 +287,8 @@ export async function obterAtendimento(
       titularidade: string | null;
       valor: number | string;
       data_caixa: string | null;
+      status: "Pago" | "Pendente";
+      parcelamento: string | null;
     }[];
     formulas: { id: string }[];
   };
@@ -300,12 +307,16 @@ export async function obterAtendimento(
       quantidade: Number(item.quantidade),
       valorUnitario: Number(item.valor_unitario),
     })),
-    formas: linha.lancamentos.map((lancamento) => ({
+    // Ordenado aqui, não no banco: a ordem do embed não é garantida, e
+    // "10/12" ordenado como texto viria antes de "2/12".
+    formas: [...linha.lancamentos].sort(compararPorParcela).map((lancamento) => ({
       id: lancamento.id,
       instituicao: lancamento.instituicao,
       titularidade: lancamento.titularidade,
       valor: Number(lancamento.valor),
       dataCaixa: lancamento.data_caixa,
+      status: lancamento.status,
+      parcelamento: lancamento.parcelamento,
     })),
     formulaId: linha.formulas[0]?.id ?? null,
     fechada: linha.lancamentos.length > 0,
