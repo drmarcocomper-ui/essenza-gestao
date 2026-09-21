@@ -853,3 +853,99 @@ describe("data do pagamento", () => {
     expect(saida.error?.issues[0]?.path).toEqual(["data_caixa"]);
   });
 });
+
+describe("fechamento só crédito sem data de pagamento", () => {
+  /**
+   * O formulário como a tela manda. Em conta 100% crédito o campo de
+   * data não é renderizado, então `data_caixa` nem vem no FormData.
+   */
+  function formulario(
+    formas: { instituicao: string; modalidade: string; parcelas: string; valor: string }[],
+    dataCaixa?: string,
+  ) {
+    const formData = new FormData();
+
+    if (dataCaixa !== undefined) formData.set("data_caixa", dataCaixa);
+
+    formData.append("item_tipo", "servico");
+    formData.append("item_ref", SERVICO);
+    formData.append("item_quantidade", "1");
+    formData.append("item_valor", "629,90");
+
+    for (const forma of formas) {
+      formData.append("forma_instituicao", forma.instituicao);
+      formData.append("forma_titularidade", "");
+      formData.append("forma_modalidade", forma.modalidade);
+      formData.append("forma_parcelas", forma.parcelas);
+      formData.append("forma_valor", forma.valor);
+    }
+
+    return formData;
+  }
+
+  /** A mesma composição da action: schema, depois uma linha por parcela. */
+  function linhasDaConta(formData: FormData) {
+    const conta = contaSchema.parse(lerConta(formData));
+
+    return conta.formas.flatMap((forma) =>
+      parcelasDaForma(forma, conta.data_caixa),
+    );
+  }
+
+  const credito = { instituicao: "SumUp", modalidade: "credito", parcelas: "3", valor: "500,00" };
+  const dinheiro = { instituicao: "Dinheiro", modalidade: "", parcelas: "1", valor: "129,90" };
+
+  it("100% crédito sem data: tudo Pendente, sem data de caixa, sem exceção", () => {
+    const formData = formulario([{ ...credito, valor: "629,90" }]);
+
+    expect(formData.has("data_caixa")).toBe(false);
+
+    let linhas: ReturnType<typeof linhasDaConta> = [];
+
+    expect(() => {
+      linhas = linhasDaConta(formData);
+    }).not.toThrow();
+
+    expect(linhas).toHaveLength(3);
+
+    for (const linha of linhas) {
+      expect(linha.status).toBe("Pendente");
+      expect(linha.data_caixa).toBeNull();
+    }
+
+    expect(linhas.map((linha) => linha.parcelamento)).toEqual(["1/3", "2/3", "3/3"]);
+  });
+
+  it("100% crédito em 1x sem data: Pendente e sem data de caixa", () => {
+    const linhas = linhasDaConta(
+      formulario([{ ...credito, parcelas: "1", valor: "629,90" }]),
+    );
+
+    expect(linhas).toEqual([
+      expect.objectContaining({ status: "Pendente", data_caixa: null, parcelamento: null }),
+    ]);
+  });
+
+  it("mista sem data: o schema recusa, e nenhuma linha é montada", () => {
+    const saida = contaSchema.safeParse(lerConta(formulario([credito, dinheiro])));
+
+    expect(saida.success).toBe(false);
+    expect(saida.error?.issues.map((problema) => problema.path)).toEqual([
+      ["data_caixa"],
+    ]);
+    expect(() => linhasDaConta(formulario([credito, dinheiro]))).toThrow();
+  });
+
+  it("mista com data: só a linha do Dinheiro recebe data de caixa", () => {
+    const linhas = linhasDaConta(formulario([credito, dinheiro], "2026-09-14"));
+
+    expect(
+      linhas.map((linha) => [linha.forma_pagamento, linha.status, linha.data_caixa]),
+    ).toEqual([
+      ["Cartão de crédito", "Pendente", null],
+      ["Cartão de crédito", "Pendente", null],
+      ["Cartão de crédito", "Pendente", null],
+      ["Dinheiro", "Pago", "2026-09-14"],
+    ]);
+  });
+});
