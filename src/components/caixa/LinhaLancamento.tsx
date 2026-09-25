@@ -1,6 +1,11 @@
 import Link from "next/link";
 
 import type { LancamentoLista } from "@/lib/caixa/consultas";
+import {
+  dataReferenciaCaixa,
+  marcaCaixa,
+  type VisaoCaixa,
+} from "@/lib/caixa/visao";
 import { formatarDiaMes, formatarMoeda } from "@/lib/formatters";
 
 /**
@@ -9,17 +14,28 @@ import { formatarDiaMes, formatarMoeda } from "@/lib/formatters";
  *
  * Entrada e saída se distinguem por três sinais ao mesmo tempo: a cor da
  * borda, a cor do valor e o sinal antes dele. Cor sozinha não basta.
+ *
+ * Na visão Caixa a data é a da entrada do dinheiro. Quando ainda não é
+ * dinheiro, o selo ao lado da data diz por quê — "Previsto" ou
+ * "Pendente" — e ocupa o lugar do selo de status, para não repetir.
  */
 export default function LinhaLancamento({
   lancamento,
+  visao = "competencia",
 }: {
   lancamento: LancamentoLista;
+  visao?: VisaoCaixa;
 }) {
   const entrada = lancamento.tipo === "Entrada";
   const pendente = lancamento.status === "Pendente";
   const contraparte = entrada
     ? lancamento.cliente?.nome
     : lancamento.fornecedor;
+  const caixa = visao === "caixa";
+  const data = caixa
+    ? dataReferenciaCaixa(lancamento)
+    : lancamento.data_competencia;
+  const marca = caixa ? marcaCaixa(lancamento) : null;
 
   return (
     <Link
@@ -29,8 +45,16 @@ export default function LinhaLancamento({
       }`}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm tabular-nums text-neutral-500">
-          {formatarDiaMes(lancamento.data_competencia)}
+        <span className="flex items-baseline gap-2">
+          <span className="text-sm tabular-nums text-neutral-500">
+            {formatarDiaMes(data)}
+          </span>
+
+          {marca && (
+            <span className="rounded-full border border-amber-300 px-1.5 text-xs text-amber-800">
+              {marca}
+            </span>
+          )}
         </span>
 
         <span
@@ -57,15 +81,17 @@ export default function LinhaLancamento({
           {lancamento.categoria}
         </span>
 
-        <span
-          className={`rounded-full px-2 py-0.5 font-medium ${
-            pendente
-              ? "bg-amber-100 text-amber-800"
-              : "bg-emerald-100 text-emerald-800"
-          }`}
-        >
-          {lancamento.status}
-        </span>
+        {!marca && (
+          <span
+            className={`rounded-full px-2 py-0.5 font-medium ${
+              pendente
+                ? "bg-amber-100 text-amber-800"
+                : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {lancamento.status}
+          </span>
+        )}
 
         {lancamento.forma_pagamento && (
           <span className="text-neutral-400">{lancamento.forma_pagamento}</span>

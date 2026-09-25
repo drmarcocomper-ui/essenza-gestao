@@ -1,8 +1,9 @@
 import { mesAtual, mesValido } from "@/lib/caixa/mes";
 import type { StatusLancamento, TipoLancamento } from "@/lib/caixa/schema";
+import type { VisaoCaixa } from "@/lib/caixa/visao";
 
 /**
- * O estado da lista do caixa mora na URL: mês, tipo e status. Assim o
+ * O estado da lista do caixa mora na URL: mês, tipo, status e visão. Assim o
  * voltar do navegador funciona, e a tela recarregada volta igual.
  *
  * Na URL os valores são slugs sem acento ('saida'); no banco são os
@@ -16,6 +17,7 @@ export type FiltrosCaixa = {
   mes: string;
   tipo: SlugTipo;
   status: SlugStatus;
+  visao: VisaoCaixa;
 };
 
 const TIPO_POR_SLUG: Record<SlugTipo, TipoLancamento | "Todos"> = {
@@ -60,15 +62,17 @@ export function lerFiltros(params: Bruto): FiltrosCaixa {
       ["todos", "pago", "pendente"] as const,
       "todos",
     ),
+    visao: slug(params.visao, ["caixa", "competencia"] as const, "caixa"),
   };
 }
 
 /** Link para a lista com estes filtros. Filtro no padrão não vai na URL. */
-export function linkCaixa({ mes, tipo, status }: FiltrosCaixa) {
+export function linkCaixa({ mes, tipo, status, visao }: FiltrosCaixa) {
   const busca = new URLSearchParams({ mes });
 
   if (tipo !== "todos") busca.set("tipo", tipo);
   if (status !== "todos") busca.set("status", status);
+  if (visao !== "caixa") busca.set("visao", visao);
 
   return `/caixa?${busca.toString()}`;
 }

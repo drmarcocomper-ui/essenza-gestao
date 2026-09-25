@@ -1,16 +1,19 @@
 import { Wallet } from "lucide-react";
 
 import type { LancamentoLista } from "@/lib/caixa/consultas";
+import type { VisaoCaixa } from "@/lib/caixa/visao";
 
 import LinhaLancamento from "./LinhaLancamento";
 
 export default function ListaLancamentos({
   lancamentos,
   filtrada,
+  visao,
 }: {
   lancamentos: LancamentoLista[];
   /** Com filtro ligado, a lista vazia quer dizer outra coisa. */
   filtrada: boolean;
+  visao: VisaoCaixa;
 }) {
   if (lancamentos.length === 0) {
     return (
@@ -29,7 +32,7 @@ export default function ListaLancamentos({
     <ul className="space-y-2">
       {lancamentos.map((lancamento) => (
         <li key={lancamento.id}>
-          <LinhaLancamento lancamento={lancamento} />
+          <LinhaLancamento lancamento={lancamento} visao={visao} />
         </li>
       ))}
     </ul>

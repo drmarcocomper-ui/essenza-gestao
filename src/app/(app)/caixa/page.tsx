@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 
+import ChaveVisao from "@/components/caixa/ChaveVisao";
 import FiltrosCaixa from "@/components/caixa/FiltrosCaixa";
 import ListaLancamentos from "@/components/caixa/ListaLancamentos";
 import NavegacaoMes from "@/components/caixa/NavegacaoMes";
-import ResumoMes from "@/components/caixa/ResumoMes";
+import ResumoMes, { ResumoCaixa } from "@/components/caixa/ResumoMes";
 import {
   contarPendentes,
   listarLancamentos,
+  obterResumoCaixa,
   obterResumoMes,
 } from "@/lib/caixa/consultas";
 import { lerFiltros, statusDoSlug, tipoDoSlug } from "@/lib/caixa/url";
@@ -19,6 +21,7 @@ export const metadata: Metadata = {
 
 export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
   const filtros = lerFiltros(await searchParams);
+  const caixa = filtros.visao === "caixa";
 
   // Três consultas independentes: vão juntas, não em fila.
   const [lancamentos, resumo, pendentes] = await Promise.all([
@@ -26,23 +29,31 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
       mes: filtros.mes,
       tipo: tipoDoSlug(filtros.tipo),
       status: statusDoSlug(filtros.status),
+      visao: filtros.visao,
     }),
-    obterResumoMes(filtros.mes),
+    caixa ? obterResumoCaixa(filtros.mes) : obterResumoMes(filtros.mes),
     contarPendentes(),
   ]);
 
   return (
     // pb-16: a barra de lançar é fixa e não pode cobrir o último item.
     <div className="space-y-4 pb-16">
+      <ChaveVisao filtros={filtros} />
+
       <NavegacaoMes filtros={filtros} />
 
-      <ResumoMes resumo={resumo} pendentes={pendentes} />
+      {"recebido" in resumo ? (
+        <ResumoCaixa resumo={resumo} pendentes={pendentes} />
+      ) : (
+        <ResumoMes resumo={resumo} pendentes={pendentes} />
+      )}
 
       <FiltrosCaixa filtros={filtros} />
 
       <ListaLancamentos
         lancamentos={lancamentos}
         filtrada={filtros.tipo !== "todos" || filtros.status !== "todos"}
+        visao={filtros.visao}
       />
 
       {/* Acima da BottomNav (h-14), na altura do polegar. Entrada primeiro:

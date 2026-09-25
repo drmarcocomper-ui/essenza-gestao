@@ -1,6 +1,13 @@
 import { exigirSessao } from "@/lib/auth";
 import { primeiroDia, ultimoDia } from "@/lib/caixa/mes";
 import type { StatusLancamento, TipoLancamento } from "@/lib/caixa/schema";
+import {
+  dataReferenciaCaixa,
+  filtroMesCaixa,
+  somarResumoCaixa,
+  type ResumoCaixa,
+  type VisaoCaixa,
+} from "@/lib/caixa/visao";
 
 /**
  * Teto da varredura usada para sugerir instituições já digitadas.
@@ -15,6 +22,8 @@ export type LancamentoLista = {
   id: string;
   data_competencia: string;
   data_caixa: string | null;
+  /** Previsão de recebimento (017): data de referência da visão Caixa. */
+  data_prevista: string | null;
   tipo: TipoLancamento;
   categoria: string;
   descricao: string;
@@ -80,30 +89,42 @@ export type FiltroCaixa = {
   mes: string;
   tipo?: TipoLancamento | "Todos";
   status?: StatusLancamento | "Todos";
+  visao?: VisaoCaixa;
 };
 
 const COLUNAS_LISTA =
-  "id, data_competencia, data_caixa, tipo, categoria, descricao, valor, status, forma_pagamento, fornecedor, cliente:clientes(id, nome)";
+  "id, data_competencia, data_caixa, data_prevista, tipo, categoria, descricao, valor, status, forma_pagamento, fornecedor, cliente:clientes(id, nome)";
 
 /**
- * Lançamentos de um mês de competência, do mais recente para o mais
- * antigo. Dentro do mesmo dia, o que foi lançado por último aparece em
- * cima — é o que ela acabou de digitar.
+ * Lançamentos de um mês, do mais recente para o mais antigo. Dentro do
+ * mesmo dia, o que foi lançado por último aparece em cima — é o que ela
+ * acabou de digitar.
+ *
+ * Na visão Competência o mês é o da `data_competencia`. Na visão Caixa é
+ * o da data de referência (`dataReferenciaCaixa`), filtrado no banco.
  */
 export async function listarLancamentos({
   mes,
   tipo = "Todos",
   status = "Todos",
+  visao = "competencia",
 }: FiltroCaixa): Promise<LancamentoLista[]> {
   const { supabase } = await exigirSessao();
 
-  let consulta = supabase
-    .from("lancamentos")
-    .select(COLUNAS_LISTA)
-    .gte("data_competencia", primeiroDia(mes))
-    .lte("data_competencia", ultimoDia(mes))
-    .order("data_competencia", { ascending: false })
-    .order("criado_em", { ascending: false });
+  let consulta =
+    visao === "caixa"
+      ? supabase
+          .from("lancamentos")
+          .select(COLUNAS_LISTA)
+          .or(filtroMesCaixa(mes))
+          .order("criado_em", { ascending: false })
+      : supabase
+          .from("lancamentos")
+          .select(COLUNAS_LISTA)
+          .gte("data_competencia", primeiroDia(mes))
+          .lte("data_competencia", ultimoDia(mes))
+          .order("data_competencia", { ascending: false })
+          .order("criado_em", { ascending: false });
 
   if (tipo !== "Todos") consulta = consulta.eq("tipo", tipo);
   if (status !== "Todos") consulta = consulta.eq("status", status);
@@ -114,7 +135,16 @@ export async function listarLancamentos({
     throw new Error(`Não foi possível carregar o caixa: ${error.message}`);
   }
 
-  return (data ?? []) as unknown as LancamentoLista[];
+  const lancamentos = (data ?? []) as unknown as LancamentoLista[];
+
+  if (visao === "competencia") return lancamentos;
+
+  // O PostgREST não ordena por expressão. O mês já veio filtrado do
+  // banco; aqui só se ordena o que veio. O sort é estável, então o
+  // `criado_em` desc do banco segue valendo dentro do mesmo dia.
+  return lancamentos.sort((a, b) =>
+    dataReferenciaCaixa(b).localeCompare(dataReferenciaCaixa(a)),
+  );
 }
 
 /**
@@ -145,6 +175,31 @@ export async function obterResumoMes(mes: string): Promise<ResumoMes> {
     saidas: Number(linha?.saidas ?? 0),
     resultado: Number(linha?.resultado ?? 0),
   };
+}
+
+/**
+ * Resumo do mês na visão Caixa, pela mesma data de referência da lista.
+ * Separa o que já andou (Pago) do que ainda vai andar (Pendente).
+ */
+export async function obterResumoCaixa(mes: string): Promise<ResumoCaixa> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select("tipo, status, valor")
+    .or(filtroMesCaixa(mes));
+
+  if (error) {
+    throw new Error(`Não foi possível carregar o resumo: ${error.message}`);
+  }
+
+  return somarResumoCaixa(
+    (data ?? []) as {
+      tipo: TipoLancamento;
+      status: StatusLancamento;
+      valor: number;
+    }[],
+  );
 }
 
 /**
