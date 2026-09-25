@@ -31,6 +31,8 @@ export type LancamentoLista = {
   valor: number;
   status: StatusLancamento;
   forma_pagamento: string | null;
+  /** "2/3" — texto, como na planilha. Null fora de parcelamento. */
+  parcelamento: string | null;
   fornecedor: string | null;
   cliente: { id: string; nome: string } | null;
 };
@@ -93,7 +95,7 @@ export type FiltroCaixa = {
 };
 
 const COLUNAS_LISTA =
-  "id, data_competencia, data_caixa, data_prevista, tipo, categoria, descricao, valor, status, forma_pagamento, fornecedor, cliente:clientes(id, nome)";
+  "id, data_competencia, data_caixa, data_prevista, tipo, categoria, descricao, valor, status, forma_pagamento, parcelamento, fornecedor, cliente:clientes(id, nome)";
 
 /**
  * Lançamentos de um mês, do mais recente para o mais antigo. Dentro do

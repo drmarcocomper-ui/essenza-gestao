@@ -16,6 +16,7 @@ const base: LancamentoLista = {
   valor: 180,
   status: "Pago",
   forma_pagamento: "Pix",
+  parcelamento: null,
   fornecedor: null,
   cliente: { id: "cli-1", nome: "Jéssica Conceição" },
 };
@@ -43,6 +44,7 @@ const parcela: LancamentoLista = {
   data_prevista: "2026-10-23",
   status: "Pendente",
   forma_pagamento: "Cartão de crédito",
+  parcelamento: "1/3",
 };
 
 describe("LinhaLancamento", () => {
@@ -120,6 +122,25 @@ describe("LinhaLancamento", () => {
     expect(screen.getByText("12/09")).toBeInTheDocument();
     // Um selo só: o de status dá lugar ao da visão Caixa.
     expect(screen.getAllByText("Pendente")).toHaveLength(1);
+  });
+
+  it.each(["caixa", "competencia"] as const)(
+    "mostra a parcela depois da forma de pagamento (visão %s)",
+    (visao) => {
+      render(<LinhaLancamento lancamento={parcela} visao={visao} />);
+
+      const chip = screen.getByText("Parcela 1/3");
+
+      expect(screen.getByText("Cartão de crédito").nextElementSibling).toBe(
+        chip,
+      );
+    },
+  );
+
+  it("sem parcelamento, não mostra chip de parcela", () => {
+    render(<LinhaLancamento lancamento={base} visao="caixa" />);
+
+    expect(screen.queryByText(/Parcela/)).not.toBeInTheDocument();
   });
 
   it("a linha inteira abre a edição", () => {

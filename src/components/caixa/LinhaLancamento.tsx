@@ -8,6 +8,8 @@ import {
 } from "@/lib/caixa/visao";
 import { formatarDiaMes, formatarMoeda } from "@/lib/formatters";
 
+import ChipParcela from "./ChipParcela";
+
 /**
  * Uma linha da lista do caixa. A linha inteira abre a edição — alvo de
  * toque grande, para usar de pé e com uma mão.
@@ -96,6 +98,8 @@ export default function LinhaLancamento({
         {lancamento.forma_pagamento && (
           <span className="text-neutral-400">{lancamento.forma_pagamento}</span>
         )}
+
+        <ChipParcela parcelamento={lancamento.parcelamento} />
       </div>
     </Link>
   );
