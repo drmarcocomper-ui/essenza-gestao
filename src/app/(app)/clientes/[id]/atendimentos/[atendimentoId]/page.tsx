@@ -222,8 +222,8 @@ function ContaFechada({ atendimento }: { atendimento: AtendimentoDetalhe }) {
 
               {/* Parcela e estado de cada linha: sem eles, "SumUp · PJ ·
                   R$ 209,96" três vezes não diz que são 1/3, 2/3 e 3/3,
-                  nem que ainda não entraram. Pendente não mostra data
-                  nenhuma — o app não prevê quando o crédito cai. */}
+                  nem que ainda não entraram. Pendente não mostra data de
+                  caixa — ainda não caiu; a previsão fica em "A receber". */}
               <span className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 <ChipParcela parcelamento={forma.parcelamento} />
 

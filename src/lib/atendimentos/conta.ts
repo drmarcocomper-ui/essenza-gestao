@@ -239,6 +239,40 @@ export function dividirEmParcelas(valor: number, parcelas: number) {
   );
 }
 
+/**
+ * Dias entre uma parcela de crédito e a seguinte, contando do
+ * atendimento. A maquininha dela não tem antecipação: cada parcela cai
+ * um prazo depois da anterior.
+ */
+export const PRAZO_DIAS_CARTAO = 30;
+
+/**
+ * A previsão de recebimento de cada parcela, em 'AAAA-MM-DD', na ordem.
+ *
+ * Parcela n (1..N) = atendimento + n × PRAZO_DIAS_CARTAO dias. Nenhuma
+ * cai no dia do atendimento. 23/09 em 3x → 23/10, 22/11, 22/12.
+ *
+ * Entra e sai texto. A soma de dias passa por `Date.UTC` só como
+ * calendário — ano, mês e dia lidos e escritos em UTC —, porque
+ * `new Date('2026-09-23')` no fuso do salão voltaria um dia.
+ */
+export function calcularDatasPrevistas(dataAtendimento: string, vezes: number) {
+  const [ano, mes, dia] = dataAtendimento.slice(0, 10).split("-").map(Number);
+  const total = Math.max(1, Math.trunc(vezes));
+
+  return Array.from({ length: total }, (_, indice) => {
+    const data = new Date(
+      Date.UTC(ano!, mes! - 1, dia! + (indice + 1) * PRAZO_DIAS_CARTAO),
+    );
+
+    return [
+      String(data.getUTCFullYear()).padStart(4, "0"),
+      String(data.getUTCMonth() + 1).padStart(2, "0"),
+      String(data.getUTCDate()).padStart(2, "0"),
+    ].join("-");
+  });
+}
+
 /** O rótulo da parcela. Null em 1x: "1/1" afirmaria parcelamento que não houve. */
 export function rotuloParcela(indice: number, parcelas: number) {
   return parcelas > 1 ? `${indice + 1}/${parcelas}` : null;
@@ -249,6 +283,7 @@ export type ParcelaConta = {
   forma_pagamento: string | null;
   status: "Pago" | "Pendente";
   data_caixa: string | null;
+  data_prevista: string | null;
   parcelamento: string | null;
   valor: number;
 };
@@ -262,12 +297,15 @@ export type ParcelaConta = {
  * CRÉDITO NASCE PENDENTE E SEM DATA DE CAIXA, inclusive a primeira
  * parcela e inclusive em 1x: o crédito cai em torno de trinta dias, não
  * hoje. Dizer o contrário encheria o resumo de caixa de dinheiro que
- * ainda não existe na conta dela. A data de cada parcela entra depois,
- * em "A receber", no dia em que ela vê o dinheiro cair — o app NUNCA
- * prevê data de compensação.
+ * ainda não existe na conta dela. A data de caixa de cada parcela entra
+ * depois, em "A receber", no dia em que ela vê o dinheiro cair.
+ *
+ * Crédito leva a PREVISÃO em `data_prevista` (`calcularDatasPrevistas`).
+ * É informativa: ordena "A receber" e diz quando esperar, mas nunca
+ * vira `data_caixa` — a data real continua vindo só da confirmação.
  *
  * Débito e as demais instituições continuam nascendo Pagas, com a data
- * que a tela perguntou.
+ * que a tela perguntou, e sem previsão.
  */
 export function parcelasDaForma(
   forma: {
@@ -277,6 +315,7 @@ export function parcelasDaForma(
     valor: number;
   },
   dataCaixa: string,
+  dataAtendimento: string,
 ): ParcelaConta[] {
   const credito = forma.modalidade === "credito";
   const vezes = credito
@@ -287,11 +326,16 @@ export function parcelasDaForma(
     ? FORMA_POR_MODALIDADE[forma.modalidade]
     : (FORMA_POR_INSTITUICAO[forma.instituicao as Instituicao] ?? null);
 
+  const previstas = credito
+    ? calcularDatasPrevistas(dataAtendimento, vezes)
+    : null;
+
   return dividirEmParcelas(forma.valor, vezes).map((valor, indice) => ({
     forma_pagamento,
     status: credito ? "Pendente" : "Pago",
     // `chk_lancamento_caixa` (002) só exige data quando o status é Pago.
     data_caixa: credito ? null : dataCaixa,
+    data_prevista: previstas?.[indice] ?? null,
     parcelamento: rotuloParcela(indice, vezes),
     valor,
   }));

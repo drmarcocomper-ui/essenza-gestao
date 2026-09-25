@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calcularDatasPrevistas,
   categoriaDaConta,
   contaSchema,
   descricaoDaConta,
@@ -18,6 +19,7 @@ import {
   modalidadeDe,
   parcelasDaForma,
   PARCELAS_MAXIMO,
+  PRAZO_DIAS_CARTAO,
   titularidadeDe,
   totalItens,
 } from "@/lib/atendimentos/conta";
@@ -593,15 +595,77 @@ describe("modalidade da maquininha", () => {
   });
 });
 
+describe("previsão de recebimento das parcelas", () => {
+  it("o prazo é 30 dias por parcela", () => {
+    expect(PRAZO_DIAS_CARTAO).toBe(30);
+  });
+
+  it("1x: um prazo depois do atendimento, nunca no dia", () => {
+    expect(calcularDatasPrevistas("2026-09-23", 1)).toEqual(["2026-10-23"]);
+  });
+
+  it("3x: 23/09 → 23/10, 22/11, 22/12", () => {
+    expect(calcularDatasPrevistas("2026-09-23", 3)).toEqual([
+      "2026-10-23",
+      "2026-11-22",
+      "2026-12-22",
+    ]);
+  });
+
+  it("12x: a última cai 360 dias depois, já no ano seguinte", () => {
+    const datas = calcularDatasPrevistas("2026-09-23", 12);
+
+    expect(datas).toHaveLength(12);
+    expect(datas[0]).toBe("2026-10-23");
+    expect(datas[11]).toBe("2027-09-18");
+    // Em ordem e sem repetir: nenhuma parcela empata com outra.
+    expect([...datas].sort()).toEqual(datas);
+    expect(new Set(datas).size).toBe(12);
+  });
+
+  it("atendimento em 31/01: fevereiro curto empurra para março", () => {
+    expect(calcularDatasPrevistas("2026-01-31", 2)).toEqual([
+      "2026-03-02",
+      "2026-04-01",
+    ]);
+  });
+
+  it("atendimento em 31/12: vira o ano", () => {
+    expect(calcularDatasPrevistas("2026-12-31", 3)).toEqual([
+      "2027-01-30",
+      "2027-03-01",
+      "2027-03-31",
+    ]);
+  });
+
+  it("atendimento em 29/02 de ano bissexto", () => {
+    expect(calcularDatasPrevistas("2028-02-29", 2)).toEqual([
+      "2028-03-30",
+      "2028-04-29",
+    ]);
+  });
+
+  it("não depende do fuso de quem roda: é aritmética de calendário", () => {
+    // A data sai igual à que entrou mais os dias — sem voltar um dia,
+    // como faria `new Date('2026-09-23')` lido no fuso de São Paulo.
+    expect(calcularDatasPrevistas("2026-09-01", 1)).toEqual(["2026-10-01"]);
+  });
+});
+
 describe("lançamentos de uma forma de pagamento", () => {
   const CAIXA = "2026-09-14";
+  const ATENDIMENTO = "2026-09-12";
 
   const sumup = (
     modalidade: "credito" | "debito",
     parcelas: number,
     valor: number,
   ) =>
-    parcelasDaForma({ instituicao: "SumUp", modalidade, parcelas, valor }, CAIXA);
+    parcelasDaForma(
+      { instituicao: "SumUp", modalidade, parcelas, valor },
+      CAIXA,
+      ATENDIMENTO,
+    );
 
   it("débito nasce Pago, com a data que a tela perguntou", () => {
     expect(sumup("debito", 1, 629.9)).toEqual([
@@ -609,6 +673,7 @@ describe("lançamentos de uma forma de pagamento", () => {
         forma_pagamento: "Cartão de débito",
         status: "Pago",
         data_caixa: CAIXA,
+        data_prevista: null,
         parcelamento: null,
         valor: 629.9,
       },
@@ -621,6 +686,8 @@ describe("lançamentos de uma forma de pagamento", () => {
         forma_pagamento: "Cartão de crédito",
         status: "Pendente",
         data_caixa: null,
+        // Previsão: atendimento (12/09) + 30 dias.
+        data_prevista: "2026-10-12",
         // 1x não leva rótulo: "1/1" afirmaria parcelamento que não houve.
         parcelamento: null,
         valor: 629.9,
@@ -638,6 +705,18 @@ describe("lançamentos de uma forma de pagamento", () => {
     expect(parcelas.every((p) => p.data_caixa === null)).toBe(true);
   });
 
+  it("crédito em 3x prevê cada parcela a partir do atendimento, não do caixa", () => {
+    expect(sumup("credito", 3, 629.9).map((p) => p.data_prevista)).toEqual([
+      "2026-10-12",
+      "2026-11-11",
+      "2026-12-11",
+    ]);
+  });
+
+  it("débito não tem previsão", () => {
+    expect(sumup("debito", 1, 629.9)[0]?.data_prevista).toBeNull();
+  });
+
   it("a primeira parcela de crédito não nasce Paga nem por engano", () => {
     expect(sumup("credito", 4, 1200)[0]).toMatchObject({
       status: "Pendente",
@@ -651,12 +730,14 @@ describe("lançamentos de uma forma de pagamento", () => {
       parcelasDaForma(
         { instituicao: "Dinheiro", modalidade: null, parcelas: 1, valor: 480 },
         CAIXA,
+        ATENDIMENTO,
       ),
     ).toEqual([
       {
         forma_pagamento: "Dinheiro",
         status: "Pago",
         data_caixa: CAIXA,
+        data_prevista: null,
         parcelamento: null,
         valor: 480,
       },
@@ -668,6 +749,7 @@ describe("lançamentos de uma forma de pagamento", () => {
       parcelasDaForma(
         { instituicao: "Nubank", modalidade: null, parcelas: 1, valor: 480 },
         CAIXA,
+        ATENDIMENTO,
       )[0]?.forma_pagamento,
     ).toBeNull();
   });
@@ -732,7 +814,7 @@ describe("conta parcelada inteira", () => {
     });
 
     const linhas = conta.formas.flatMap((forma) =>
-      parcelasDaForma(forma, conta.data_caixa),
+      parcelasDaForma(forma, conta.data_caixa, "2026-09-12"),
     );
 
     expect(linhas).toHaveLength(3);
@@ -888,7 +970,7 @@ describe("fechamento só crédito sem data de pagamento", () => {
     const conta = contaSchema.parse(lerConta(formData));
 
     return conta.formas.flatMap((forma) =>
-      parcelasDaForma(forma, conta.data_caixa),
+      parcelasDaForma(forma, conta.data_caixa, "2026-09-12"),
     );
   }
 

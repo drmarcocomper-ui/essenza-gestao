@@ -198,7 +198,7 @@ export async function fecharConta(
   // de vínculo, e não precisa: a conta é o vínculo.
   const { error: erroLancamentos } = await supabase.from("lancamentos").insert(
     conta.formas.flatMap((forma) =>
-      parcelasDaForma(forma, conta.data_caixa).map((parcela) => ({
+      parcelasDaForma(forma, conta.data_caixa, atendimento.data).map((parcela) => ({
         // Competência é a data do atendimento, igual em todas as
         // parcelas: o serviço foi prestado num dia só.
         data_competencia: atendimento.data,
@@ -206,6 +206,8 @@ export async function fecharConta(
         // primeira parcela — ela confirma cada uma em "A receber", no dia
         // em que o dinheiro cai. O resto nasce Pago com a data da tela.
         data_caixa: parcela.data_caixa,
+        // Só crédito: atendimento + n × 30 dias. Previsão, não caixa.
+        data_prevista: parcela.data_prevista,
         status: parcela.status,
         tipo: "Entrada",
         categoria: categoriaDaConta(classificaveis),

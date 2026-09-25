@@ -105,6 +105,10 @@ export const lancamentoSchema = z
 
     data_caixa: dataOpcional,
 
+    // Previsão de recebimento: opcional e sem cálculo aqui. Não é data de
+    // caixa e não tem trava de futuro — prever é justamente olhar adiante.
+    data_prevista: dataOpcional,
+
     categoria: z
       .string()
       .trim()
@@ -214,8 +218,10 @@ export type DadosLancamento = z.infer<typeof lancamentoSchema>;
 /**
  * Confirmação de recebimento: a parcela caiu, e ela informa em que dia.
  *
- * O app NUNCA prevê data de compensação — não calcula, não sugere, não
- * deriva da venda. Este schema só confere o que ela digitou.
+ * A data de caixa vem dela e só dela. A parcela de crédito tem uma
+ * previsão (`data_prevista`, atendimento + n × 30 dias), mas previsão é
+ * informativa: não vira data de caixa nem é sugerida no campo. Este
+ * schema só confere o que ela digitou.
  */
 export const confirmacaoRecebimentoSchema = z.object({
   id: z.uuid({ message: "Lançamento inválido" }),
@@ -234,6 +240,7 @@ export const CAMPOS_LANCAMENTO = [
   "tipo",
   "data_competencia",
   "data_caixa",
+  "data_prevista",
   "categoria",
   "descricao",
   "cliente_id",

@@ -36,6 +36,8 @@ export type Lancamento = {
   cliente_id: string | null;
   /** Preenchido nas parcelas vindas do fechamento de conta. */
   atendimento_id: string | null;
+  /** Previsão de recebimento (017). Informativa: não é data de caixa. */
+  data_prevista: string | null;
   fornecedor: string | null;
   forma_pagamento: string | null;
   instituicao: string | null;
@@ -64,6 +66,8 @@ export type Pendente = {
   cliente: string | null;
   /** "1/3", "2/3" — texto, como na planilha. Null fora de parcelamento. */
   parcelamento: string | null;
+  /** Quando a parcela deve cair (017). Null no que não tem previsão. */
+  data_prevista: string | null;
 };
 
 export type Categoria = {
@@ -164,19 +168,23 @@ export async function contarPendentes(): Promise<number> {
 }
 
 /**
- * A receber, da mais antiga para a mais nova — a ordem em que as
- * parcelas vão cair.
+ * A receber, pela previsão de recebimento — a ordem em que as parcelas
+ * devem cair. O que não tem previsão (histórico da planilha, lançamento
+ * manual sem data prevista) vai para o fim, pela data da venda.
  *
  * `parcelamento` vem da migration 014: sem ele, as três parcelas da
- * mesma venda são linhas idênticas na tela.
+ * mesma venda são linhas idênticas na tela. `data_prevista`, da 017.
  */
 export async function listarPendentes(): Promise<Pendente[]> {
   const { supabase } = await exigirSessao();
 
   const { data, error } = await supabase
     .from("vw_a_receber")
-    .select("id, data_competencia, descricao, valor, cliente, parcelamento")
+    .select(
+      "id, data_competencia, descricao, valor, cliente, parcelamento, data_prevista",
+    )
     // A view já ordena, mas ordenar aqui não depende disso.
+    .order("data_prevista", { ascending: true, nullsFirst: false })
     .order("data_competencia", { ascending: true });
 
   if (error) {
@@ -193,7 +201,7 @@ export async function obterLancamento(id: string): Promise<Lancamento | null> {
   const { data, error } = await supabase
     .from("lancamentos")
     .select(
-      "id, data_competencia, data_caixa, tipo, categoria, descricao, cliente_id, atendimento_id, fornecedor, forma_pagamento, instituicao, titularidade, parcelamento, valor, status, observacoes, origem_registro, cliente:clientes(id, nome)",
+      "id, data_competencia, data_caixa, tipo, categoria, descricao, cliente_id, atendimento_id, data_prevista, fornecedor, forma_pagamento, instituicao, titularidade, parcelamento, valor, status, observacoes, origem_registro, cliente:clientes(id, nome)",
     )
     .eq("id", id)
     .maybeSingle();

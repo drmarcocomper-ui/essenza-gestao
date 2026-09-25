@@ -15,8 +15,10 @@ export const metadata: Metadata = {
  * A receber: o dinheiro vendido que ainda não caiu — quase tudo parcela
  * de cartão esperando compensar.
  *
- * A data que aparece é a da VENDA. O app não prevê quando a parcela cai,
- * nem mostra prazo estimado: quem informa o dia é ela, ao confirmar.
+ * Cada parcela mostra a data da VENDA e, quando tem, a PREVISÃO de
+ * recebimento (atendimento + n × 30 dias). A previsão é informativa: o
+ * dia em que o dinheiro caiu quem informa é ela, ao confirmar, e a
+ * confirmação não parte da previsão.
  */
 export default async function PendentesPage() {
   const pendentes = await listarPendentes();
@@ -54,8 +56,8 @@ export default async function PendentesPage() {
             </p>
           </section>
 
-          {/* A view já entrega da mais antiga para a mais nova: é a ordem
-              em que as parcelas vão caindo. */}
+          {/* Pela previsão, da mais próxima para a mais distante: é a
+              ordem em que as parcelas vão caindo. Sem previsão, no fim. */}
           <ul className="space-y-2">
             {pendentes.map((pendente) => (
               <li
@@ -79,6 +81,15 @@ export default async function PendentesPage() {
                       {formatarMoeda(pendente.valor)}
                     </span>
                   </div>
+
+                  {pendente.data_prevista && (
+                    <p className="text-sm font-medium text-amber-800">
+                      Previsão{" "}
+                      <span className="tabular-nums">
+                        {formatarData(pendente.data_prevista)}
+                      </span>
+                    </p>
+                  )}
 
                   {/* Lançamento sem cliente é normal: nem toda entrada da
                       planilha veio com a pessoa identificada. */}

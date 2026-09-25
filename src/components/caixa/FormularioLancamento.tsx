@@ -338,6 +338,21 @@ export default function FormularioLancamento({
           )}
         </Campo>
 
+        <Campo
+          rotulo="Previsão de recebimento"
+          erro={estado.erros?.data_prevista}
+          ajuda="Quando o dinheiro deve cair. Só informativo."
+        >
+          {(props) => (
+            <input
+              {...props}
+              name="data_prevista"
+              type="date"
+              defaultValue={valor("data_prevista")}
+            />
+          )}
+        </Campo>
+
         <Campo rotulo="Observações" erro={estado.erros?.observacoes} multilinha>
           {(props) => (
             <textarea

@@ -164,8 +164,9 @@ export type ResultadoConfirmacao =
  * `status` e `data_caixa` vão no MESMO update — `chk_lancamento_caixa`
  * recusa Pago sem data, então gravar em dois passos quebraria no meio.
  *
- * A data vem dela e só dela. O app não prevê compensação: não calcula a
- * partir da venda, não sugere prazo de cartão, não preenche sozinho.
+ * A data vem dela e só dela. A parcela tem uma previsão (`data_prevista`),
+ * mas ela é informativa: não é usada como data de caixa, não é sugerida
+ * no campo e não muda aqui — fica como registro do que se esperava.
  */
 export async function confirmarRecebimento(
   id: string,
