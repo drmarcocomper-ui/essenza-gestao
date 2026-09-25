@@ -34,6 +34,8 @@ export type Lancamento = {
   categoria: string;
   descricao: string;
   cliente_id: string | null;
+  /** Preenchido nas parcelas vindas do fechamento de conta. */
+  atendimento_id: string | null;
   fornecedor: string | null;
   forma_pagamento: string | null;
   instituicao: string | null;
@@ -191,7 +193,7 @@ export async function obterLancamento(id: string): Promise<Lancamento | null> {
   const { data, error } = await supabase
     .from("lancamentos")
     .select(
-      "id, data_competencia, data_caixa, tipo, categoria, descricao, cliente_id, fornecedor, forma_pagamento, instituicao, titularidade, parcelamento, valor, status, observacoes, origem_registro, cliente:clientes(id, nome)",
+      "id, data_competencia, data_caixa, tipo, categoria, descricao, cliente_id, atendimento_id, fornecedor, forma_pagamento, instituicao, titularidade, parcelamento, valor, status, observacoes, origem_registro, cliente:clientes(id, nome)",
     )
     .eq("id", id)
     .maybeSingle();

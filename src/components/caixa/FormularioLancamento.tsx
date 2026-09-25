@@ -9,7 +9,9 @@ import CampoValor from "@/components/caixa/CampoValor";
 import type { Categoria, Lancamento } from "@/lib/caixa/consultas";
 import { hoje } from "@/lib/caixa/mes";
 import {
+  competenciaTravada,
   FORMAS_PAGAMENTO,
+  MENSAGEM_COMPETENCIA_TRAVADA,
   STATUS,
   TIPOS,
   TITULARIDADES,
@@ -74,6 +76,7 @@ export default function FormularioLancamento({
 
   const entrada = tipo === "Entrada";
   const pago = status === "Pago";
+  const travada = lancamento ? competenciaTravada(lancamento) : false;
   const idInstituicoes = useId();
 
   /**
@@ -197,18 +200,35 @@ export default function FormularioLancamento({
         rotulo="Data de competência"
         erro={estado.erros?.data_competencia}
         obrigatorio
-        ajuda="Quando o atendimento aconteceu."
+        ajuda={
+          travada
+            ? MENSAGEM_COMPETENCIA_TRAVADA
+            : "Quando o atendimento aconteceu."
+        }
       >
-        {(props) => (
-          <input
-            {...props}
-            name="data_competencia"
-            type="date"
-            value={dataCompetencia}
-            onChange={(evento) => setDataCompetencia(evento.target.value)}
-            required
-          />
-        )}
+        {(props) =>
+          travada ? (
+            <>
+              {/* Campo desabilitado não vai no FormData: a data segue no
+                  escondido, e a action confere que não mudou. */}
+              <input {...props} type="date" value={dataCompetencia} disabled />
+              <input
+                type="hidden"
+                name="data_competencia"
+                value={dataCompetencia}
+              />
+            </>
+          ) : (
+            <input
+              {...props}
+              name="data_competencia"
+              type="date"
+              value={dataCompetencia}
+              onChange={(evento) => setDataCompetencia(evento.target.value)}
+              required
+            />
+          )
+        }
       </Campo>
 
       <Segmentado

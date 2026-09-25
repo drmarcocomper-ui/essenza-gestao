@@ -6,8 +6,10 @@ import { redirect } from "next/navigation";
 import { exigirSessao } from "@/lib/auth";
 import { obterLancamento } from "@/lib/caixa/consultas";
 import {
+  competenciaTravada,
   confirmacaoRecebimentoSchema,
   errosPorCampo,
+  MENSAGEM_COMPETENCIA_TRAVADA,
   lancamentoSchema,
   lerFormulario,
   type CampoLancamento,
@@ -78,6 +80,24 @@ export async function atualizarLancamento(
 
   if (!validacao.success) {
     return { erros: errosPorCampo(validacao.error), valores: bruto };
+  }
+
+  // O campo travado no formulário não basta: a regra vale para qualquer
+  // chamada, e o que conta é a linha como está no banco agora.
+  const atual = await obterLancamento(id);
+
+  if (!atual) {
+    return { mensagem: "Este lançamento não existe mais.", valores: bruto };
+  }
+
+  if (
+    competenciaTravada(atual) &&
+    validacao.data.data_competencia !== atual.data_competencia
+  ) {
+    return {
+      erros: { data_competencia: MENSAGEM_COMPETENCIA_TRAVADA },
+      valores: bruto,
+    };
   }
 
   const { error } = await supabase
