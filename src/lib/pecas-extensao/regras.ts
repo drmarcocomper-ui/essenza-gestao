@@ -48,6 +48,16 @@ export function mensagemCodigoDuplicado(codigo: string) {
   return `Já existe a peça ${codigo.trim()}.`;
 }
 
+/**
+ * Peça desmembrada fica presa: o código não muda e a peça não é
+ * excluída. A tela mostra o motivo; a action recusa com o mesmo texto.
+ */
+export const MENSAGEM_CODIGO_TRAVADO =
+  "Peça desmembrada: o código não muda, porque as partes nasceram dele.";
+
+export const MENSAGEM_EXCLUSAO_TRAVADA =
+  "Peça desmembrada não pode ser excluída: as partes apontam para ela.";
+
 /** Ordem natural: 999 < 1254 < 1254-a < 1254-a1 < 1254-b. */
 export function compararCodigos(a: string, b: string) {
   return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
