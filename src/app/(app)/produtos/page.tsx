@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+import ListaPecas from "@/components/produtos/ListaPecas";
 import ListaProdutos from "@/components/produtos/ListaProdutos";
+import { listarPecas } from "@/lib/pecas-extensao/consultas";
 import { listarProdutos } from "@/lib/produtos/consultas";
 
 export const metadata: Metadata = {
@@ -10,16 +12,20 @@ export const metadata: Metadata = {
 };
 
 /**
- * A aba Produtos é feita de seções. Hoje só existe a de revenda; a de
- * peças de extensão (`pecas_extensao`, 018) entra depois como outra
- * `<section>` aqui, com as próprias rotas sob o segmento estático
- * `extensao`, que o Next resolve antes do `[id]` da revenda.
+ * A aba Produtos é feita de seções: revenda (`produtos`) e peças de
+ * extensão (`pecas_extensao`, 018). As rotas da extensão ficam sob o
+ * segmento estático `extensao`, que o Next resolve antes do `[id]` da
+ * revenda.
  */
 export default async function ProdutosPage() {
-  const produtos = await listarProdutos();
+  const [produtos, pecas] = await Promise.all([
+    listarProdutos(),
+    listarPecas(),
+  ]);
 
   return (
-    <div className="space-y-4">
+    // Folga no fim para o botão flutuante não cobrir a última peça.
+    <div className="space-y-8 pb-20">
       <section aria-labelledby="secao-revenda" className="space-y-3">
         <h2
           id="secao-revenda"
@@ -29,6 +35,27 @@ export default async function ProdutosPage() {
         </h2>
 
         <ListaProdutos produtos={produtos} />
+      </section>
+
+      <section aria-labelledby="secao-extensao" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2
+            id="secao-extensao"
+            className="text-sm font-medium text-neutral-500"
+          >
+            Extensão
+          </h2>
+
+          <Link
+            href="/produtos/extensao/nova"
+            className="-mr-2 flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-medium text-rose-700 active:bg-rose-50"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Nova peça
+          </Link>
+        </div>
+
+        <ListaPecas pecas={pecas} />
       </section>
 
       {/* Acima da BottomNav (h-14) e no canto do polegar. */}
