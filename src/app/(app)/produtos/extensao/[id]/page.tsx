@@ -9,7 +9,7 @@ import {
   obterPeca,
   pecaTemFilhas,
 } from "@/lib/pecas-extensao/consultas";
-import { MENSAGEM_EXCLUSAO_TRAVADA } from "@/lib/pecas-extensao/regras";
+import { travasDaPeca } from "@/lib/pecas-extensao/regras";
 
 export const metadata: Metadata = {
   title: "Editar peça — Essenza",
@@ -26,10 +26,12 @@ export default async function EditarPecaPage({
     notFound();
   }
 
-  const [desmembrada, { cores, texturas, origens }] = await Promise.all([
+  const [temFilhas, { cores, texturas, origens }] = await Promise.all([
     pecaTemFilhas(peca.id),
     listarSugestoes(),
   ]);
+
+  const travas = travasDaPeca({ ...peca, temFilhas });
 
   return (
     <div className="space-y-4">
@@ -41,7 +43,8 @@ export default async function EditarPecaPage({
         // O id vem amarrado no servidor: não trafega em campo escondido.
         acao={atualizarPeca.bind(null, peca.id)}
         peca={peca}
-        codigoTravado={desmembrada}
+        codigoTravado={travas.codigoTravado}
+        motivoCustoTravado={travas.motivoCustoTravado}
         cores={cores}
         texturas={texturas}
         origens={origens}
@@ -49,8 +52,10 @@ export default async function EditarPecaPage({
       />
 
       <div className="border-t border-neutral-200 pt-4">
-        {desmembrada ? (
-          <p className="text-sm text-neutral-500">{MENSAGEM_EXCLUSAO_TRAVADA}</p>
+        {travas.motivoExclusaoTravada ? (
+          <p className="text-sm text-neutral-500">
+            {travas.motivoExclusaoTravada}
+          </p>
         ) : (
           <BotaoExcluirPeca id={peca.id} codigo={peca.codigo} />
         )}

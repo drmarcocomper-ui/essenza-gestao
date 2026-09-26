@@ -175,6 +175,26 @@ export function lerFormulario(formData: FormData) {
   ) as Record<CampoPeca, string>;
 }
 
+/**
+ * Uma parte do desmembramento, como chega da tela → objeto plano, só com
+ * os campos previstos. A tela manda objeto, não FormData, mas o servidor
+ * não confia na forma: o que não for texto vira "".
+ */
+export function lerCampos(valor: unknown) {
+  const objeto =
+    typeof valor === "object" && valor !== null
+      ? (valor as Record<string, unknown>)
+      : {};
+
+  return Object.fromEntries(
+    CAMPOS_PECA.map((campo) => {
+      const bruto = objeto[campo];
+
+      return [campo, typeof bruto === "string" ? bruto : ""];
+    }),
+  ) as Record<CampoPeca, string>;
+}
+
 /** Achata os erros do Zod em `campo → primeira mensagem`. */
 export function errosPorCampo(erro: z.ZodError) {
   const erros: Partial<Record<CampoPeca, string>> = {};
@@ -193,4 +213,12 @@ export function errosPorCampo(erro: z.ZodError) {
 /** A linha que o cadastro insere: peça inteira, sem mãe. */
 export function novaPeca(dados: DadosPeca) {
   return { ...dados, peca_mae_id: null };
+}
+
+/**
+ * A linha de uma parte: `peca_mae_id` só é gravado aqui, no insert, e
+ * nunca num update (ver 018).
+ */
+export function novaParte(dados: DadosPeca, maeId: string) {
+  return { ...dados, peca_mae_id: maeId };
 }

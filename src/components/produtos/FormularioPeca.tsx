@@ -18,6 +18,8 @@ type Props = {
   peca?: PecaExtensao;
   /** Peça desmembrada: o código fica só para leitura. */
   codigoTravado?: boolean;
+  /** Mãe ou parte de desmembramento: o preço de compra fica só para leitura, com este motivo. */
+  motivoCustoTravado?: string | null;
   cores: string[];
   texturas: string[];
   origens: string[];
@@ -46,6 +48,7 @@ export default function FormularioPeca({
   acao,
   peca,
   codigoTravado = false,
+  motivoCustoTravado = null,
   cores,
   texturas,
   origens,
@@ -193,7 +196,7 @@ export default function FormularioPeca({
       <Campo
         rotulo="Preço de compra"
         erro={estado.erros?.preco_compra}
-        ajuda={AJUDA_PRECO}
+        ajuda={motivoCustoTravado ?? AJUDA_PRECO}
         prefixo="R$"
       >
         {(props) => (
@@ -202,13 +205,19 @@ export default function FormularioPeca({
             name="preco_compra"
             type="text"
             inputMode="decimal"
+            // Travado é readOnly, como o código: o valor vai no envio e a
+            // action confere que ele não mudou.
             value={precoCompra}
+            readOnly={motivoCustoTravado !== null}
             onChange={(evento) =>
               setPrecoCompra(mascararMoeda(evento.target.value))
             }
             placeholder="0,00"
             autoComplete="off"
             enterKeyHint="next"
+            className={`${props.className} ${
+              motivoCustoTravado !== null ? "bg-neutral-100 text-neutral-600" : ""
+            }`}
           />
         )}
       </Campo>

@@ -81,6 +81,8 @@ export const MENSAGEM_DESMEMBRAR_SEM_CUSTO =
 
 export const MENSAGEM_SEM_PARTES = "Esta peça não tem partes.";
 
+export const MENSAGEM_PECA_NAO_ENCONTRADA = "Peça não encontrada.";
+
 export const MENSAGEM_DESFAZER_TRAVADO =
   "Uma das partes também foi desmembrada: desfaça o desmembramento dela primeiro.";
 
@@ -152,6 +154,13 @@ export function travasDaPeca({
  */
 export function paraCentavos(valor: number) {
   return Math.round(valor * 100);
+}
+
+/** Mesmo preço, em centavos; null ("não informado") só é igual a null. */
+export function mesmoPreco(a: number | null, b: number | null) {
+  if (a === null || b === null) return a === b;
+
+  return paraCentavos(a) === paraCentavos(b);
 }
 
 export function somarCentavos(valores: readonly number[]) {

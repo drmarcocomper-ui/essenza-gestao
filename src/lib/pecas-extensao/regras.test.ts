@@ -9,6 +9,7 @@ import {
   indicesCodigoRepetido,
   mensagemCodigoDuplicado,
   mensagemSomaNaoFecha,
+  mesmoPreco,
   MENSAGEM_CUSTO_TRAVADO_MAE,
   MENSAGEM_CUSTO_TRAVADO_PARTE,
   MENSAGEM_DESMEMBRAR_SEM_CUSTO,
@@ -196,6 +197,19 @@ describe("conferirCustos — soma em centavos", () => {
     expect(mensagemSomaNaoFecha(conferirCustos([50, 40], 100))).toMatch(
       /R\$\s90,00.*R\$\s100,00.*faltam R\$\s10,00/,
     );
+  });
+});
+
+describe("mesmoPreco", () => {
+  it("compara em centavos", () => {
+    expect(mesmoPreco(0.1 + 0.2, 0.3)).toBe(true);
+    expect(mesmoPreco(100, 100.01)).toBe(false);
+  });
+
+  it("null só é igual a null; zero é outro dado", () => {
+    expect(mesmoPreco(null, null)).toBe(true);
+    expect(mesmoPreco(null, 0)).toBe(false);
+    expect(mesmoPreco(0, null)).toBe(false);
   });
 });
 

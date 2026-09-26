@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { hoje } from "@/lib/caixa/mes";
 
 import {
+  lerCampos,
   MENSAGEM_ENTRADA_FUTURA,
+  novaParte,
   novaPeca,
   pecaSchema,
   type CampoPeca,
@@ -182,5 +184,29 @@ describe("novaPeca", () => {
     const dados = validar({ codigo: "1254" }).data!;
 
     expect(novaPeca(dados)).toEqual({ ...dados, peca_mae_id: null });
+  });
+});
+
+describe("novaParte", () => {
+  it("grava a parte apontando para a mãe", () => {
+    const dados = validar({ codigo: "1254-a" }).data!;
+
+    expect(novaParte(dados, "mae")).toEqual({ ...dados, peca_mae_id: "mae" });
+  });
+});
+
+describe("lerCampos", () => {
+  it("fica só com os campos previstos, e o que não é texto vira vazio", () => {
+    const campos = lerCampos({ codigo: "1254-a", gramas: 50, peca_mae_id: "x" });
+
+    expect(campos.codigo).toBe("1254-a");
+    expect(campos.gramas).toBe("");
+    expect(campos).not.toHaveProperty("peca_mae_id");
+    expect(Object.keys(campos)).toHaveLength(11);
+  });
+
+  it("aceita lixo sem quebrar", () => {
+    expect(lerCampos(null).codigo).toBe("");
+    expect(lerCampos("1254").codigo).toBe("");
   });
 });
