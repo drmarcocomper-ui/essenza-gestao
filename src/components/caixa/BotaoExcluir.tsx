@@ -22,10 +22,16 @@ export default function BotaoExcluir({ id }: { id: string }) {
       setErro(null);
 
       try {
-        await excluirLancamento(id);
-        // A volta é daqui, não da action: em produção o Next troca a
-        // mensagem de erro do servidor por um texto genérico em inglês,
-        // então o sucesso e a falha são tratados no cliente.
+        // A recusa volta como valor e em português; a exceção é só a
+        // falha de rede, que o Next não deixa ler.
+        const resultado = await excluirLancamento(id);
+
+        if (resultado.erro) {
+          setErro(resultado.erro);
+          setConfirmando(false);
+          return;
+        }
+
         router.push("/caixa");
       } catch {
         setErro("Não foi possível excluir. Tente de novo.");

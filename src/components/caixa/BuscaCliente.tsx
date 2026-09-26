@@ -20,9 +20,12 @@ export type ClienteEscolhido = { id: string; nome: string };
 export default function BuscaCliente({
   clienteInicial = null,
   erro,
+  travado,
 }: {
   clienteInicial?: ClienteEscolhido | null;
   erro?: string;
+  /** Quando vem, a cliente não troca, e o texto diz por quê. */
+  travado?: string;
 }) {
   const id = useId();
   const idErro = `${id}-erro`;
@@ -84,20 +87,30 @@ export default function BuscaCliente({
       <input type="hidden" name="cliente_id" value={escolhida?.id ?? ""} />
 
       {escolhida ? (
-        <div className="flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3">
+        <div
+          className={`flex items-center gap-2 rounded-xl border border-neutral-300 px-3 ${
+            travado ? "bg-neutral-100" : "bg-white"
+          }`}
+        >
           <UserRound aria-hidden="true" className="size-5 text-neutral-400" />
 
-          <p className="min-w-0 flex-1 truncate py-3 font-medium text-neutral-900">
+          <p
+            className={`min-w-0 flex-1 truncate py-3 font-medium ${
+              travado ? "text-neutral-500" : "text-neutral-900"
+            }`}
+          >
             {escolhida.nome}
           </p>
 
-          <button
-            type="button"
-            onClick={trocar}
-            className="-mr-1 flex h-12 min-w-11 items-center justify-center px-2 text-sm font-medium text-rose-700 active:text-rose-900"
-          >
-            Trocar
-          </button>
+          {!travado && (
+            <button
+              type="button"
+              onClick={trocar}
+              className="-mr-1 flex h-12 min-w-11 items-center justify-center px-2 text-sm font-medium text-rose-700 active:text-rose-900"
+            >
+              Trocar
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -169,10 +182,12 @@ export default function BuscaCliente({
         </div>
       )}
 
-      {erro && (
+      {erro ? (
         <p id={idErro} className="mt-1 text-sm text-rose-700">
           {erro}
         </p>
+      ) : (
+        travado && <p className="mt-1 text-xs text-neutral-500">{travado}</p>
       )}
     </div>
   );

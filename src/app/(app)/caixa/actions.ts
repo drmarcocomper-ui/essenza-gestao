@@ -13,8 +13,12 @@ import {
   type CampoLancamento,
 } from "@/lib/caixa/schema";
 import {
-  lancamentoDaConta,
-  MENSAGEM_COMPETENCIA_TRAVADA,
+  camposTravadosAlterados,
+  dadosParaAtualizar,
+  exclusaoTravada,
+  MENSAGEM_EXCLUSAO_CONTA,
+  MENSAGEM_REABRA_A_CONTA,
+  mensagemCampoTravado,
 } from "@/lib/caixa/travas";
 import { listarClientes } from "@/lib/clientes/consultas";
 
@@ -92,19 +96,24 @@ export async function atualizarLancamento(
     return { mensagem: "Este lançamento não existe mais.", valores: bruto };
   }
 
-  if (
-    lancamentoDaConta(atual) &&
-    validacao.data.data_competencia !== atual.data_competencia
-  ) {
+  // Lançamento de conta: campo travado só passa se veio igual ao gravado.
+  const alterados = camposTravadosAlterados(atual, validacao.data);
+
+  if (alterados.length > 0) {
     return {
-      erros: { data_competencia: MENSAGEM_COMPETENCIA_TRAVADA },
+      erros: Object.fromEntries(
+        alterados.map((campo) => [campo, mensagemCampoTravado(campo)]),
+      ),
+      mensagem: MENSAGEM_REABRA_A_CONTA,
       valores: bruto,
     };
   }
 
   const { error } = await supabase
     .from("lancamentos")
-    .update(validacao.data)
+    // Na conta, só o que é editável vai para o banco — o travado não
+    // entra nem igual. No manual, tudo, como sempre.
+    .update(dadosParaAtualizar(atual, validacao.data))
     .eq("id", id);
 
   if (error) {
@@ -123,31 +132,54 @@ export async function atualizarLancamento(
 }
 
 /**
- * Só sai o que nasceu no app. O histórico da planilha é registro fechado:
- * o `eq('origem_registro','app')` faz o próprio banco recusar o resto,
- * mesmo que a chamada venha de fora da UI.
+ * Só sai o que nasceu no app e não é de conta.
+ *
+ * O histórico da planilha é registro fechado: o `eq('origem_registro',
+ * 'app')` faz o próprio banco recusar, mesmo que a chamada venha de fora
+ * da UI. Lançamento de conta (`atendimento_id` preenchido) é recusado
+ * antes de tocar o banco — apagá-lo reabriria a conta ou descolaria a
+ * soma dos itens —, e o `is('atendimento_id', null)` repete a trava no
+ * próprio delete.
+ *
+ * A mensagem volta como valor: em produção o Next troca a de um erro
+ * lançado no servidor por um texto genérico em inglês.
  */
-export async function excluirLancamento(id: string) {
+export async function excluirLancamento(
+  id: string,
+): Promise<{ erro?: string }> {
   const { supabase } = await exigirSessao();
+
+  const atual = await obterLancamento(id);
+
+  if (!atual) {
+    return { erro: "Este lançamento não existe mais." };
+  }
+
+  if (exclusaoTravada(atual)) {
+    return { erro: MENSAGEM_EXCLUSAO_CONTA };
+  }
 
   const { data, error } = await supabase
     .from("lancamentos")
     .delete()
     .eq("id", id)
     .eq("origem_registro", "app")
+    .is("atendimento_id", null)
     .select("id");
 
   if (error) {
-    throw new Error(`Não foi possível excluir: ${error.message}`);
+    return { erro: `Não foi possível excluir: ${error.message}` };
   }
 
   if ((data ?? []).length === 0) {
-    throw new Error(
-      "Este lançamento veio da planilha e não pode ser excluído aqui.",
-    );
+    return {
+      erro: "Este lançamento veio da planilha e não pode ser excluído aqui.",
+    };
   }
 
   revalidarCaixa(id);
+
+  return {};
 }
 
 /**

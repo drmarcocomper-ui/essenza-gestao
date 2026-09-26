@@ -19,6 +19,7 @@ import {
 } from "@/lib/caixa/schema";
 import {
   lancamentoDaConta,
+  MENSAGEM_CAMPO_TRAVADO_CONTA,
   MENSAGEM_COMPETENCIA_TRAVADA,
 } from "@/lib/caixa/travas";
 import { valorParaCampo } from "@/lib/formatters";
@@ -78,7 +79,9 @@ export default function FormularioLancamento({
 
   const entrada = tipo === "Entrada";
   const pago = status === "Pago";
-  const travada = lancamento ? lancamentoDaConta(lancamento) : false;
+  // Entrada de conta: valor, tipo, competência, parcela e cliente são
+  // da conta, e só mudam reabrindo-a. A action confere de novo.
+  const daConta = lancamento ? lancamentoDaConta(lancamento) : false;
   const idInstituicoes = useId();
 
   /**
@@ -129,20 +132,27 @@ export default function FormularioLancamento({
           Entrada: "border-emerald-600 bg-emerald-600",
           Saída: "border-rose-600 bg-rose-600",
         }}
+        bloqueado={daConta}
       />
 
       {/* O valor não passa pelo `valor()`: numeric vem do banco como
           número (180.00 chega como 180) e a máscara leria isso como
           centavos. `valorParaCampo` devolve as duas casas de volta. */}
       <CampoValor
-        valorInicial={estado.valores?.valor ?? valorParaCampo(lancamento?.valor)}
+        valorInicial={
+          daConta
+            ? valorParaCampo(lancamento?.valor)
+            : (estado.valores?.valor ?? valorParaCampo(lancamento?.valor))
+        }
         erro={estado.erros?.valor}
+        travado={daConta ? MENSAGEM_CAMPO_TRAVADO_CONTA : undefined}
       />
 
       {entrada ? (
         <BuscaCliente
           clienteInicial={lancamento?.cliente ?? null}
           erro={estado.erros?.cliente_id}
+          travado={daConta ? MENSAGEM_CAMPO_TRAVADO_CONTA : undefined}
         />
       ) : (
         <Campo rotulo="Fornecedor" erro={estado.erros?.fornecedor}>
@@ -203,13 +213,13 @@ export default function FormularioLancamento({
         erro={estado.erros?.data_competencia}
         obrigatorio
         ajuda={
-          travada
+          daConta
             ? MENSAGEM_COMPETENCIA_TRAVADA
             : "Quando o atendimento aconteceu."
         }
       >
         {(props) =>
-          travada ? (
+          daConta ? (
             <>
               {/* Campo desabilitado não vai no FormData: a data segue no
                   escondido, e a action confere que não mudou. */}
@@ -327,17 +337,40 @@ export default function FormularioLancamento({
           )}
         </Campo>
 
-        <Campo rotulo="Parcelamento" erro={estado.erros?.parcelamento}>
-          {(props) => (
-            <input
-              {...props}
-              name="parcelamento"
-              type="text"
-              defaultValue={valor("parcelamento")}
-              placeholder="1/3"
-              autoComplete="off"
-            />
-          )}
+        <Campo
+          rotulo="Parcelamento"
+          erro={estado.erros?.parcelamento}
+          ajuda={daConta ? MENSAGEM_CAMPO_TRAVADO_CONTA : undefined}
+        >
+          {(props) =>
+            daConta ? (
+              <>
+                {/* Como a competência: o desabilitado não vai no
+                    FormData, e o gravado segue no escondido. */}
+                <input
+                  {...props}
+                  type="text"
+                  value={lancamento?.parcelamento ?? ""}
+                  placeholder="Sem parcela"
+                  disabled
+                />
+                <input
+                  type="hidden"
+                  name="parcelamento"
+                  value={lancamento?.parcelamento ?? ""}
+                />
+              </>
+            ) : (
+              <input
+                {...props}
+                name="parcelamento"
+                type="text"
+                defaultValue={valor("parcelamento")}
+                placeholder="1/3"
+                autoComplete="off"
+              />
+            )
+          }
         </Campo>
 
         <Campo
@@ -397,12 +430,15 @@ function Segmentado<T extends string>({
   selecionado,
   aoTrocar,
   cores,
+  bloqueado = false,
 }: {
   rotulo: string;
   opcoes: { valor: T; rotulo: string }[];
   selecionado: T;
   aoTrocar: (valor: T) => void;
   cores: Record<string, string>;
+  /** Mostra a escolha sem deixar trocar (entrada de conta). */
+  bloqueado?: boolean;
 }) {
   return (
     <div role="group" aria-label={rotulo} className="flex gap-2">
@@ -415,10 +451,11 @@ function Segmentado<T extends string>({
             type="button"
             onClick={() => aoTrocar(opcao.valor)}
             aria-pressed={ativo}
+            disabled={bloqueado}
             className={`h-12 flex-1 rounded-xl border font-medium ${
               ativo
                 ? `${cores[opcao.valor]} text-white`
-                : "border-neutral-300 bg-white text-neutral-600 active:bg-neutral-100"
+                : "border-neutral-300 bg-white text-neutral-600 active:bg-neutral-100 disabled:text-neutral-300"
             }`}
           >
             {opcao.rotulo}

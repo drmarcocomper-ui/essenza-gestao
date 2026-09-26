@@ -14,9 +14,12 @@ import { mascararMoeda } from "@/lib/formatters";
 export default function CampoValor({
   valorInicial = "",
   erro,
+  travado,
 }: {
   valorInicial?: string;
   erro?: string;
+  /** Quando vem, o valor é só leitura, e o texto diz por quê. */
+  travado?: string;
 }) {
   const id = useId();
   const idErro = `${id}-erro`;
@@ -46,12 +49,19 @@ export default function CampoValor({
           inputMode="decimal"
           value={valor}
           onChange={(evento) => setValor(mascararMoeda(evento.target.value))}
+          // Só leitura, não desabilitado: o valor segue no FormData, e a
+          // action confere que não mudou.
+          readOnly={Boolean(travado)}
           placeholder="0,00"
           enterKeyHint="next"
           autoComplete="off"
           aria-invalid={erro ? true : undefined}
           aria-describedby={erro ? idErro : undefined}
-          className={`h-16 w-full rounded-xl border bg-white pr-4 pl-12 text-2xl font-semibold tabular-nums text-neutral-900 placeholder:font-normal placeholder:text-neutral-300 focus:ring-2 focus:ring-rose-200 focus:outline-none ${
+          className={`h-16 w-full rounded-xl border pr-4 pl-12 text-2xl font-semibold tabular-nums placeholder:font-normal placeholder:text-neutral-300 focus:ring-2 focus:ring-rose-200 focus:outline-none ${
+            travado
+              ? "bg-neutral-100 text-neutral-500"
+              : "bg-white text-neutral-900"
+          } ${
             erro
               ? "border-rose-400 focus:border-rose-500"
               : "border-neutral-300 focus:border-rose-500"
@@ -61,7 +71,7 @@ export default function CampoValor({
 
       {/* Cortesia entra com 0,00 para o atendimento não sumir do histórico. */}
       <p className="mt-1 text-xs text-neutral-500">
-        Cortesia? Deixe 0,00.
+        {travado ?? "Cortesia? Deixe 0,00."}
       </p>
 
       {erro && (

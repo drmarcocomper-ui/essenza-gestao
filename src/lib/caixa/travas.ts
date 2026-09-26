@@ -80,6 +80,10 @@ export const MENSAGEM_COMPETENCIA_TRAVADA =
 export const MENSAGEM_CAMPO_TRAVADO_CONTA =
   "Entrada da conta de um atendimento: para mudar isto, reabra a conta.";
 
+/** O topo do formulário quando a action recusa uma trava. */
+export const MENSAGEM_REABRA_A_CONTA =
+  "Valor, tipo, competência, parcela e cliente de uma entrada de conta não mudam pelo Caixa. Para isso, reabra a conta no atendimento.";
+
 export const MENSAGEM_EXCLUSAO_CONTA =
   "Esta entrada é da conta de um atendimento e não pode ser excluída aqui. Para excluir, reabra a conta.";
 
