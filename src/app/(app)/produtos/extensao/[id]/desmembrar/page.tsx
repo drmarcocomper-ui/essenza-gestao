@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import FormularioDesmembrar from "@/components/produtos/FormularioDesmembrar";
 import {
   listarSugestoes,
+  obterContaDaPeca,
   obterPeca,
   pecaTemFilhas,
 } from "@/lib/pecas-extensao/consultas";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 
 /**
  * Corta a peça em partes. Peça que não pode ser desmembrada (já tem
- * partes, ou sem preço de compra) mostra o motivo em vez do formulário:
+ * partes, sem preço de compra, ou numa conta) mostra o motivo em vez do formulário:
  * alguém pode chegar aqui por um link antigo.
  */
 export default async function DesmembrarPecaPage({
@@ -30,12 +31,13 @@ export default async function DesmembrarPecaPage({
     notFound();
   }
 
-  const [temFilhas, { cores, texturas, origens }] = await Promise.all([
+  const [temFilhas, conta, { cores, texturas, origens }] = await Promise.all([
     pecaTemFilhas(mae.id),
+    obterContaDaPeca(mae.id),
     listarSugestoes(),
   ]);
 
-  const { motivoNaoDesmembra } = travasDaPeca({ ...mae, temFilhas });
+  const { motivoNaoDesmembra } = travasDaPeca({ ...mae, temFilhas, conta });
 
   return (
     <div className="space-y-4">

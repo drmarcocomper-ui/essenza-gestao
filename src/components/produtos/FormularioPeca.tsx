@@ -7,7 +7,6 @@ import type { EstadoFormularioPeca } from "@/app/(app)/produtos/extensao/actions
 import { hoje } from "@/lib/caixa/mes";
 import { mascararMoeda, valorParaCampo } from "@/lib/formatters";
 import type { PecaExtensao } from "@/lib/pecas-extensao/consultas";
-import { MENSAGEM_CODIGO_TRAVADO } from "@/lib/pecas-extensao/regras";
 import type { CampoPeca } from "@/lib/pecas-extensao/schema";
 
 type Props = {
@@ -16,8 +15,8 @@ type Props = {
     formData: FormData,
   ) => Promise<EstadoFormularioPeca>;
   peca?: PecaExtensao;
-  /** Peça desmembrada: o código fica só para leitura. */
-  codigoTravado?: boolean;
+  /** Peça desmembrada ou numa conta: o código fica só para leitura, com este motivo. */
+  motivoCodigoTravado?: string | null;
   /** Mãe ou parte de desmembramento: o preço de compra fica só para leitura, com este motivo. */
   motivoCustoTravado?: string | null;
   cores: string[];
@@ -47,7 +46,7 @@ function medidaParaCampo(valor: number | null | undefined) {
 export default function FormularioPeca({
   acao,
   peca,
-  codigoTravado = false,
+  motivoCodigoTravado = null,
   motivoCustoTravado = null,
   cores,
   texturas,
@@ -55,6 +54,7 @@ export default function FormularioPeca({
   rotuloEnviar,
 }: Props) {
   const [estado, enviar, enviando] = useActionState(acao, ESTADO_INICIAL);
+  const codigoTravado = motivoCodigoTravado !== null;
   const idCores = useId();
   const idTexturas = useId();
   const idOrigens = useId();
@@ -86,7 +86,7 @@ export default function FormularioPeca({
       <Campo
         rotulo="Código"
         erro={estado.erros?.codigo}
-        ajuda={codigoTravado ? MENSAGEM_CODIGO_TRAVADO : undefined}
+        ajuda={motivoCodigoTravado ?? undefined}
         obrigatorio
       >
         {(props) => (

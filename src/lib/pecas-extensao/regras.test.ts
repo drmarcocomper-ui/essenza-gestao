@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   chaveCodigo,
+  codigoContemTermo,
+  estadoDaPeca,
+  mensagemPecaEmOutraConta,
+  MENSAGEM_CODIGO_TRAVADO,
+  pecaVendavelNaConta,
+  type ContaDaPeca,
   codigoDoDuplicado,
   compararCodigos,
   conferirCustos,
@@ -284,12 +290,31 @@ describe("codigoDoDuplicado", () => {
   });
 });
 
+function travas(situacao: Partial<Parameters<typeof travasDaPeca>[0]>) {
+  return travasDaPeca({
+    pecaMaeId: null,
+    precoCompra: 300,
+    temFilhas: false,
+    conta: null,
+    ...situacao,
+  });
+}
+
+const CONTA_ABERTA: ContaDaPeca = {
+  atendimentoId: "at-1",
+  clienteId: "cl-1",
+  clienteNome: "Maria Souza",
+  data: "2026-09-12",
+  fechada: false,
+};
+
+const CONTA_FECHADA: ContaDaPeca = { ...CONTA_ABERTA, fechada: true };
+
 describe("travasDaPeca", () => {
   it("mãe sem filhas, com custo: tudo livre", () => {
-    expect(
-      travasDaPeca({ pecaMaeId: null, precoCompra: 300, temFilhas: false }),
-    ).toEqual({
+    expect(travas({})).toEqual({
       codigoTravado: false,
+      motivoCodigoTravado: null,
       motivoCustoTravado: null,
       motivoExclusaoTravada: null,
       motivoNaoDesmembra: null,
@@ -297,29 +322,21 @@ describe("travasDaPeca", () => {
   });
 
   it("mãe sem filhas e sem custo: não desmembra, o resto livre", () => {
-    const travas = travasDaPeca({
-      pecaMaeId: null,
-      precoCompra: null,
-      temFilhas: false,
-    });
+    const resultado = travas({ precoCompra: null });
 
-    expect(travas.motivoNaoDesmembra).toBe(MENSAGEM_DESMEMBRAR_SEM_CUSTO);
-    expect(travas.motivoCustoTravado).toBeNull();
-    expect(travas.motivoExclusaoTravada).toBeNull();
+    expect(resultado.motivoNaoDesmembra).toBe(MENSAGEM_DESMEMBRAR_SEM_CUSTO);
+    expect(resultado.motivoCustoTravado).toBeNull();
+    expect(resultado.motivoExclusaoTravada).toBeNull();
   });
 
   it("custo zero desmembra: zero é custo informado", () => {
-    expect(
-      travasDaPeca({ pecaMaeId: null, precoCompra: 0, temFilhas: false })
-        .motivoNaoDesmembra,
-    ).toBeNull();
+    expect(travas({ precoCompra: 0 }).motivoNaoDesmembra).toBeNull();
   });
 
   it("mãe com filhas: código e custo travados, não exclui, não desmembra de novo", () => {
-    expect(
-      travasDaPeca({ pecaMaeId: null, precoCompra: 300, temFilhas: true }),
-    ).toEqual({
+    expect(travas({ temFilhas: true })).toEqual({
       codigoTravado: true,
+      motivoCodigoTravado: MENSAGEM_CODIGO_TRAVADO,
       motivoCustoTravado: MENSAGEM_CUSTO_TRAVADO_MAE,
       motivoExclusaoTravada: MENSAGEM_EXCLUSAO_TRAVADA,
       motivoNaoDesmembra: MENSAGEM_JA_DESMEMBRADA,
@@ -327,10 +344,9 @@ describe("travasDaPeca", () => {
   });
 
   it("parte: custo travado e exclusão bloqueada; código livre; desmembra", () => {
-    expect(
-      travasDaPeca({ pecaMaeId: "mae", precoCompra: 100, temFilhas: false }),
-    ).toEqual({
+    expect(travas({ pecaMaeId: "mae", precoCompra: 100 })).toEqual({
       codigoTravado: false,
+      motivoCodigoTravado: null,
       motivoCustoTravado: MENSAGEM_CUSTO_TRAVADO_PARTE,
       motivoExclusaoTravada: MENSAGEM_EXCLUSAO_PARTE,
       motivoNaoDesmembra: null,
@@ -338,13 +354,105 @@ describe("travasDaPeca", () => {
   });
 
   it("parte com filhas: travada como mãe", () => {
-    expect(
-      travasDaPeca({ pecaMaeId: "mae", precoCompra: 100, temFilhas: true }),
-    ).toEqual({
+    expect(travas({ pecaMaeId: "mae", precoCompra: 100, temFilhas: true })).toEqual({
       codigoTravado: true,
+      motivoCodigoTravado: MENSAGEM_CODIGO_TRAVADO,
       motivoCustoTravado: MENSAGEM_CUSTO_TRAVADO_MAE,
       motivoExclusaoTravada: MENSAGEM_EXCLUSAO_TRAVADA,
       motivoNaoDesmembra: MENSAGEM_JA_DESMEMBRADA,
     });
+  });
+
+  it.each([
+    ["aberta", CONTA_ABERTA],
+    ["fechada", CONTA_FECHADA],
+  ])("peça em conta %s: código só leitura, não exclui, não desmembra", (_, conta) => {
+    expect(travas({ conta })).toEqual({
+      codigoTravado: true,
+      motivoCodigoTravado:
+        "Esta peça está na conta de Maria Souza em 12/09/2026: o código não muda.",
+      motivoCustoTravado: null,
+      motivoExclusaoTravada:
+        "Esta peça está na conta de Maria Souza em 12/09/2026 e não pode ser excluída.",
+      motivoNaoDesmembra:
+        "Esta peça está na conta de Maria Souza em 12/09/2026 e não pode ser desmembrada.",
+    });
+  });
+
+  it("parte em conta: o motivo da conta vem antes do de parte", () => {
+    const resultado = travas({ pecaMaeId: "mae", precoCompra: 100, conta: CONTA_FECHADA });
+
+    expect(resultado.motivoExclusaoTravada).toMatch(/^Esta peça está na conta de/);
+    expect(resultado.motivoCustoTravado).toBe(MENSAGEM_CUSTO_TRAVADO_PARTE);
+  });
+});
+
+describe("estadoDaPeca", () => {
+  it("sem partes e sem item: disponível", () => {
+    expect(estadoDaPeca({ temFilhas: false, conta: null })).toBe("disponivel");
+  });
+
+  it("com partes: desmembrada", () => {
+    expect(estadoDaPeca({ temFilhas: true, conta: null })).toBe("desmembrada");
+  });
+
+  it("com item e conta sem lançamento: na conta aberta", () => {
+    expect(estadoDaPeca({ temFilhas: false, conta: CONTA_ABERTA })).toBe(
+      "na_conta_aberta",
+    );
+  });
+
+  it("com item e conta com lançamento: vendida", () => {
+    expect(estadoDaPeca({ temFilhas: false, conta: CONTA_FECHADA })).toBe("vendida");
+  });
+});
+
+describe("pecaVendavelNaConta", () => {
+  const ATENDIMENTO = "at-1";
+
+  it("livre: vendável", () => {
+    expect(
+      pecaVendavelNaConta({ temFilhas: false, atendimentoDoItem: null }, ATENDIMENTO),
+    ).toBe(true);
+  });
+
+  it("com partes: não é vendável, nem livre", () => {
+    expect(
+      pecaVendavelNaConta({ temFilhas: true, atendimentoDoItem: null }, ATENDIMENTO),
+    ).toBe(false);
+  });
+
+  it("em outra conta: não é vendável", () => {
+    expect(
+      pecaVendavelNaConta({ temFilhas: false, atendimentoDoItem: "at-2" }, ATENDIMENTO),
+    ).toBe(false);
+  });
+
+  it("na própria conta (reaberta): continua vendável", () => {
+    expect(
+      pecaVendavelNaConta(
+        { temFilhas: false, atendimentoDoItem: ATENDIMENTO },
+        ATENDIMENTO,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("codigoContemTermo", () => {
+  it("trim + lower, contém — sem tirar acento (a chave do índice)", () => {
+    expect(codigoContemTermo("1254-B", " 54-b ")).toBe(true);
+    expect(codigoContemTermo("Açaí-1", "acai")).toBe(false);
+    expect(codigoContemTermo("1254", "999")).toBe(false);
+  });
+
+  it("termo vazio casa com tudo", () => {
+    expect(codigoContemTermo("1254", "   ")).toBe(true);
+  });
+});
+
+describe("mensagens de peça na conta", () => {
+  it("em outra conta, com e sem código", () => {
+    expect(mensagemPecaEmOutraConta("1254")).toBe("A peça 1254 já está em outra conta.");
+    expect(mensagemPecaEmOutraConta(null)).toBe("A peça já está em outra conta.");
   });
 });

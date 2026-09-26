@@ -21,6 +21,8 @@ const {
   listarCodigos,
   listarPartes,
   algumaTemFilhas,
+  obterContaDaPeca,
+  listarContasDasPecas,
   insert,
   update,
   remover,
@@ -31,6 +33,8 @@ const {
   listarCodigos: vi.fn(),
   listarPartes: vi.fn(),
   algumaTemFilhas: vi.fn(),
+  obterContaDaPeca: vi.fn(),
+  listarContasDasPecas: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   remover: vi.fn(),
@@ -46,6 +50,8 @@ vi.mock("@/lib/pecas-extensao/consultas", () => ({
   listarCodigos,
   listarPartes,
   algumaTemFilhas,
+  obterContaDaPeca,
+  listarContasDasPecas,
 }));
 vi.mock("@/lib/auth", () => ({
   exigirSessao: async () => ({
@@ -126,6 +132,8 @@ beforeEach(() => {
     peca({ id: "b", codigo: "1254-b", pecaMaeId: MAE }),
   ]);
   algumaTemFilhas.mockResolvedValue(false);
+  obterContaDaPeca.mockResolvedValue(null);
+  listarContasDasPecas.mockResolvedValue({});
 });
 
 describe("desmembrarPeca", () => {
@@ -340,5 +348,117 @@ describe("desfazerDesmembramento", () => {
       erro: MENSAGEM_SEM_PARTES,
     });
     expect(remover).not.toHaveBeenCalled();
+  });
+});
+
+describe("peça numa conta (020)", () => {
+  const CONTA = {
+    atendimentoId: "at-1",
+    clienteId: "cl-1",
+    clienteNome: "Maria Souza",
+    data: "2026-09-12",
+    fechada: true,
+  };
+
+  const NA_CONTA = "Esta peça está na conta de Maria Souza em 12/09/2026";
+
+  /** O 23503 da FK nova, como o PostgREST devolve. */
+  const FK_DA_CONTA = {
+    code: "23503",
+    message:
+      'update or delete on table "pecas_extensao" violates foreign key constraint "atendimento_itens_peca_extensao_id_fkey" on table "atendimento_itens"',
+    details: `Key (id)=(${MAE}) is still referenced from table "atendimento_itens".`,
+  };
+
+  it("atualizarPeca: código não muda", async () => {
+    obterContaDaPeca.mockResolvedValue(CONTA);
+
+    const saida = await atualizarPeca(
+      MAE,
+      {},
+      formulario({ codigo: "1254-x", preco_compra: "100,00" }),
+    );
+
+    expect(saida.erros?.codigo).toBe(`${NA_CONTA}: o código não muda.`);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("atualizarPeca: o resto salva, sem o código no update", async () => {
+    obterContaDaPeca.mockResolvedValue(CONTA);
+
+    await atualizarPeca(
+      MAE,
+      {},
+      formulario({ codigo: "1254", preco_compra: "100,00", cor: "Loiro" }),
+    );
+
+    const alteracao = update.mock.calls[0][0] as Record<string, unknown>;
+
+    expect(alteracao.cor).toBe("Loiro");
+    expect(alteracao).not.toHaveProperty("codigo");
+  });
+
+  it("excluirPeca: recusa sem tocar no banco", async () => {
+    obterContaDaPeca.mockResolvedValue(CONTA);
+
+    expect(await excluirPeca(MAE)).toEqual({
+      erro: `${NA_CONTA} e não pode ser excluída.`,
+    });
+    expect(remover).not.toHaveBeenCalled();
+  });
+
+  it("excluirPeca: 23503 da FK nova vira o recado de peça em conta", async () => {
+    // Livre na leitura, numa conta no delete.
+    obterContaDaPeca.mockResolvedValueOnce(null).mockResolvedValueOnce(CONTA);
+    resultado.error = FK_DA_CONTA;
+
+    expect(await excluirPeca(MAE)).toEqual({
+      erro: `${NA_CONTA} e não pode ser excluída.`,
+    });
+  });
+
+  it("excluirPeca: 23503 da FK nova sem conta relida ainda diz que é conta", async () => {
+    resultado.error = FK_DA_CONTA;
+
+    expect(await excluirPeca(MAE)).toEqual({
+      erro: "Esta peça está numa conta e não pode ser excluída.",
+    });
+  });
+
+  it("excluirPeca: 23503 das partes continua com o recado de desmembrada", async () => {
+    resultado.error = {
+      code: "23503",
+      message:
+        'update or delete on table "pecas_extensao" violates foreign key constraint "pecas_extensao_peca_mae_id_fkey" on table "pecas_extensao"',
+    };
+
+    expect((await excluirPeca(MAE)).erro).toMatch(/^Peça desmembrada/);
+  });
+
+  it("desmembrarPeca: recusa sem gravar", async () => {
+    obterContaDaPeca.mockResolvedValue({ ...CONTA, fechada: false });
+
+    expect(
+      (await desmembrarPeca(MAE, [parte("a", "50,00"), parte("b", "50,00")])).mensagem,
+    ).toBe(`${NA_CONTA} e não pode ser desmembrada.`);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("desfazerDesmembramento: parte numa conta impede, sem delete", async () => {
+    listarContasDasPecas.mockResolvedValue({ b: CONTA });
+
+    expect(await desfazerDesmembramento(MAE)).toEqual({
+      erro: "A parte 1254-b está numa conta: o desmembramento não pode ser desfeito.",
+    });
+    expect(listarContasDasPecas).toHaveBeenCalledWith(["a", "b"]);
+    expect(remover).not.toHaveBeenCalled();
+  });
+
+  it("desfazerDesmembramento: 23503 da FK nova vira o recado de parte em conta", async () => {
+    resultado.error = { ...FK_DA_CONTA, details: 'Key (id)=(b) is still referenced from table "atendimento_itens".' };
+
+    expect(await desfazerDesmembramento(MAE)).toEqual({
+      erro: "Uma das partes está numa conta: o desmembramento não pode ser desfeito.",
+    });
   });
 });

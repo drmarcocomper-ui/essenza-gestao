@@ -7,12 +7,18 @@ import { exigirSessao } from "@/lib/auth";
 import {
   algumaTemFilhas,
   listarCodigos,
+  listarContasDasPecas,
   listarPartes,
+  obterContaDaPeca,
   obterPeca,
   pecaTemFilhas,
 } from "@/lib/pecas-extensao/consultas";
 import {
   codigoDoDuplicado,
+  mensagemDesfazerParteEmConta,
+  mensagemExclusaoEmConta,
+  MENSAGEM_EXCLUSAO_EM_CONTA,
+  referenciadaPorConta,
   conferirCustos,
   encontrarCodigoDuplicado,
   indicesCodigoRepetido,
@@ -21,7 +27,6 @@ import {
   mensagemSomaNaoFecha,
   mesmoPreco,
   MENSAGEM_CODIGO_REPETIDO_PARTES,
-  MENSAGEM_CODIGO_TRAVADO,
   MENSAGEM_CUSTO_PARTE_OBRIGATORIO,
   MENSAGEM_DESFAZER_TRAVADO,
   MENSAGEM_DESMEMBRAR_SEM_CUSTO,
@@ -99,9 +104,9 @@ export async function criarPeca(
 
 /**
  * Os campos do formulário, e só eles: `peca_mae_id` nunca entra num
- * update (ver 018). O código só muda em peça sem partes, e o preço de
- * compra só em peça que não é mãe nem parte de desmembramento —
- * reavaliado aqui, não só travado na tela.
+ * update (ver 018). O código só muda em peça sem partes e fora de conta
+ * (020), e o preço de compra só em peça que não é mãe nem parte de
+ * desmembramento — reavaliado aqui, não só travado na tela.
  */
 export async function atualizarPeca(
   id: string,
@@ -124,11 +129,15 @@ export async function atualizarPeca(
   }
 
   const { codigo, preco_compra, ...resto } = validacao.data;
-  const travas = travasDaPeca({ ...peca, temFilhas: await pecaTemFilhas(id) });
+  const [temFilhas, conta] = await Promise.all([
+    pecaTemFilhas(id),
+    obterContaDaPeca(id),
+  ]);
+  const travas = travasDaPeca({ ...peca, temFilhas, conta });
   const custoMudou = !mesmoPreco(preco_compra, peca.precoCompra);
 
-  if (travas.codigoTravado && codigo !== peca.codigo) {
-    return { erros: { codigo: MENSAGEM_CODIGO_TRAVADO }, valores: bruto };
+  if (travas.motivoCodigoTravado && codigo !== peca.codigo) {
+    return { erros: { codigo: travas.motivoCodigoTravado }, valores: bruto };
   }
 
   if (travas.motivoCustoTravado && custoMudou) {
@@ -173,9 +182,10 @@ export async function atualizarPeca(
 }
 
 /**
- * Exclusão física: peça não tem `ativo` (018). Só de peça sem partes e
- * que não é parte — conferido aqui, e o `on delete restrict` da 018 é a
- * rede de baixo para a primeira regra. Parte sai só pelo Desfazer da mãe.
+ * Exclusão física: peça não tem `ativo` (018). Só de peça sem partes,
+ * que não é parte e que não está em conta — conferido aqui, e os dois
+ * `on delete restrict` (018 nas partes, 020 no item da conta) são a rede
+ * de baixo. Parte sai só pelo Desfazer da mãe.
  *
  * Devolve o recado em vez de redirecionar: a volta para a lista é do
  * cliente, como no Caixa.
@@ -189,10 +199,11 @@ export async function excluirPeca(id: string): Promise<{ erro?: string }> {
     return { erro: MENSAGEM_PECA_NAO_ENCONTRADA };
   }
 
-  const { motivoExclusaoTravada } = travasDaPeca({
-    ...peca,
-    temFilhas: await pecaTemFilhas(id),
-  });
+  const [temFilhas, conta] = await Promise.all([
+    pecaTemFilhas(id),
+    obterContaDaPeca(id),
+  ]);
+  const { motivoExclusaoTravada } = travasDaPeca({ ...peca, temFilhas, conta });
 
   if (motivoExclusaoTravada) {
     return { erro: motivoExclusaoTravada };
@@ -201,6 +212,17 @@ export async function excluirPeca(id: string): Promise<{ erro?: string }> {
   const { error } = await supabase.from("pecas_extensao").delete().eq("id", id);
 
   if (error) {
+    // A peça entrou numa conta entre a leitura e o delete.
+    if (referenciadaPorConta(error)) {
+      const contaAgora = await obterContaDaPeca(id);
+
+      return {
+        erro: contaAgora
+          ? mensagemExclusaoEmConta(contaAgora)
+          : MENSAGEM_EXCLUSAO_EM_CONTA,
+      };
+    }
+
     return {
       erro: temParte(error)
         ? MENSAGEM_EXCLUSAO_TRAVADA
@@ -257,10 +279,11 @@ export async function desmembrarPeca(
     return { mensagem: MENSAGEM_PECA_NAO_ENCONTRADA };
   }
 
-  const { motivoNaoDesmembra } = travasDaPeca({
-    ...mae,
-    temFilhas: await pecaTemFilhas(mae.id),
-  });
+  const [temFilhas, conta] = await Promise.all([
+    pecaTemFilhas(mae.id),
+    obterContaDaPeca(mae.id),
+  ]);
+  const { motivoNaoDesmembra } = travasDaPeca({ ...mae, temFilhas, conta });
   const custoMae = mae.precoCompra;
 
   if (motivoNaoDesmembra || custoMae === null) {
@@ -356,9 +379,10 @@ export async function desmembrarPeca(
  * comando, então ou saem todas ou nenhuma. A mãe volta a ser peça sem
  * partes: código e custo editáveis, desmembrável de novo.
  *
- * Recusa se alguma parte também foi desmembrada; o 23503 do `on delete
- * restrict` (parte de parte criada entre a tela e o toque) vira o mesmo
- * recado.
+ * Recusa se alguma parte também foi desmembrada, ou se alguma parte está
+ * numa conta (020). O 23503 de cada `on delete restrict` — parte de
+ * parte ou item de conta criados entre a tela e o toque — vira o recado
+ * do seu caso.
  */
 export async function desfazerDesmembramento(
   maeId: string,
@@ -371,8 +395,20 @@ export async function desfazerDesmembramento(
     return { erro: MENSAGEM_SEM_PARTES };
   }
 
-  if (await algumaTemFilhas(partes.map((parte) => parte.id))) {
+  const ids = partes.map((parte) => parte.id);
+  const [temNetas, contas] = await Promise.all([
+    algumaTemFilhas(ids),
+    listarContasDasPecas(ids),
+  ]);
+
+  if (temNetas) {
     return { erro: MENSAGEM_DESFAZER_TRAVADO };
+  }
+
+  const parteEmConta = partes.find((parte) => contas[parte.id]);
+
+  if (parteEmConta) {
+    return { erro: mensagemDesfazerParteEmConta(parteEmConta.codigo) };
   }
 
   const { error } = await supabase
@@ -381,6 +417,10 @@ export async function desfazerDesmembramento(
     .eq("peca_mae_id", maeId);
 
   if (error) {
+    if (referenciadaPorConta(error)) {
+      return { erro: mensagemDesfazerParteEmConta(null) };
+    }
+
     return {
       erro: temParte(error)
         ? MENSAGEM_DESFAZER_TRAVADO

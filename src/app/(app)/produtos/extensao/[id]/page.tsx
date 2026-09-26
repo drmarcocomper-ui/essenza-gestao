@@ -8,11 +8,17 @@ import BotaoDesfazerDesmembramento from "@/components/produtos/BotaoDesfazerDesm
 import BotaoExcluirPeca from "@/components/produtos/BotaoExcluirPeca";
 import FormularioPeca from "@/components/produtos/FormularioPeca";
 import {
+  listarContasDasPecas,
   listarPartes,
+  obterContaDaPeca,
   listarSugestoes,
   obterPeca,
 } from "@/lib/pecas-extensao/consultas";
-import { compararCodigos, travasDaPeca } from "@/lib/pecas-extensao/regras";
+import {
+  compararCodigos,
+  mensagemDesfazerParteEmConta,
+  travasDaPeca,
+} from "@/lib/pecas-extensao/regras";
 
 export const metadata: Metadata = {
   title: "Editar peça — Essenza",
@@ -29,14 +35,22 @@ export default async function EditarPecaPage({
     notFound();
   }
 
-  const [partes, mae, { cores, texturas, origens }] = await Promise.all([
+  const [partes, mae, conta, { cores, texturas, origens }] = await Promise.all([
     listarPartes(peca.id),
     peca.pecaMaeId ? obterPeca(peca.pecaMaeId) : null,
+    obterContaDaPeca(peca.id),
     listarSugestoes(),
   ]);
 
   const temFilhas = partes.length > 0;
-  const travas = travasDaPeca({ ...peca, temFilhas });
+  const travas = travasDaPeca({ ...peca, temFilhas, conta });
+
+  // Parte numa conta não sai: o Desfazer, que apagaria todas, vira o
+  // motivo. Mesma regra que a action confere.
+  const contasDasPartes = temFilhas
+    ? await listarContasDasPecas(partes.map((parte) => parte.id))
+    : {};
+  const parteEmConta = partes.find((parte) => contasDasPartes[parte.id]);
 
   return (
     <div className="space-y-4">
@@ -60,7 +74,7 @@ export default async function EditarPecaPage({
         // O id vem amarrado no servidor: não trafega em campo escondido.
         acao={atualizarPeca.bind(null, peca.id)}
         peca={peca}
-        codigoTravado={travas.codigoTravado}
+        motivoCodigoTravado={travas.motivoCodigoTravado}
         motivoCustoTravado={travas.motivoCustoTravado}
         cores={cores}
         texturas={texturas}
@@ -69,7 +83,11 @@ export default async function EditarPecaPage({
       />
 
       <div className="border-t border-neutral-200 pt-4">
-        {temFilhas ? (
+        {parteEmConta ? (
+          <p className="text-sm text-neutral-500">
+            {mensagemDesfazerParteEmConta(parteEmConta.codigo)}
+          </p>
+        ) : temFilhas ? (
           <BotaoDesfazerDesmembramento
             maeId={peca.id}
             codigo={peca.codigo}

@@ -1,6 +1,14 @@
 import { exigirSessao } from "@/lib/auth";
-import type { PecaIdentificavel } from "@/lib/pecas-extensao/regras";
-import { valoresDistintos } from "@/lib/pecas-extensao/regras";
+import type {
+  ContaDaPeca,
+  PecaIdentificavel,
+} from "@/lib/pecas-extensao/regras";
+import {
+  compararCodigos,
+  idsDesmembradas,
+  pecaVendavelNaConta,
+  valoresDistintos,
+} from "@/lib/pecas-extensao/regras";
 
 /**
  * Peça de extensão (018), como a seção Extensão mostra e edita.
@@ -213,4 +221,206 @@ export async function algumaTemFilhas(ids: readonly string[]): Promise<boolean> 
   }
 
   return (data ?? []).length > 0;
+}
+
+// ---------------------------------------------------------------------
+// A peça na conta (020)
+// ---------------------------------------------------------------------
+
+type LinhaItemDaPeca = {
+  peca_extensao_id: string;
+  atendimento_id: string;
+  atendimentos: {
+    data: string;
+    cliente_id: string;
+    clientes: { nome: string } | null;
+    lancamentos: { id: string }[];
+  } | null;
+};
+
+const COLUNAS_CONTA =
+  "peca_extensao_id, atendimento_id, atendimentos(data, cliente_id, clientes(nome), lancamentos(id))";
+
+/**
+ * A conta de cada peça que já é item de algum atendimento, por id da
+ * peça. `ids` limita às peças pedidas; sem ele, vêm todas.
+ *
+ * Conta fechada é "existe lançamento com este atendimento_id", como no
+ * resto do app. Uma peça, um item (índice único da 020): cada peça
+ * aparece no máximo uma vez.
+ */
+export async function listarContasDasPecas(
+  ids?: readonly string[],
+): Promise<Record<string, ContaDaPeca>> {
+  if (ids && ids.length === 0) return {};
+
+  const { supabase } = await exigirSessao();
+
+  let consulta = supabase
+    .from("atendimento_itens")
+    .select(COLUNAS_CONTA)
+    .not("peca_extensao_id", "is", null);
+
+  if (ids) consulta = consulta.in("peca_extensao_id", [...ids]);
+
+  const { data, error } = await consulta;
+
+  if (error) {
+    throw new Error(`Não foi possível conferir as contas das peças: ${error.message}`);
+  }
+
+  const contas: Record<string, ContaDaPeca> = {};
+
+  for (const linha of (data ?? []) as unknown as LinhaItemDaPeca[]) {
+    const atendimento = linha.atendimentos;
+
+    contas[linha.peca_extensao_id] = {
+      atendimentoId: linha.atendimento_id,
+      clienteId: atendimento?.cliente_id ?? "",
+      clienteNome: atendimento?.clientes?.nome ?? "cliente",
+      data: atendimento?.data ?? "",
+      fechada: (atendimento?.lancamentos.length ?? 0) > 0,
+    };
+  }
+
+  return contas;
+}
+
+/** A conta em que a peça entrou, ou null. */
+export async function obterContaDaPeca(id: string): Promise<ContaDaPeca | null> {
+  const contas = await listarContasDasPecas([id]);
+
+  return contas[id] ?? null;
+}
+
+/** Peça como a conta a oferece: o que ela precisa para reconhecer a peça. */
+export type PecaVendavel = {
+  id: string;
+  codigo: string;
+  cor: string | null;
+  textura: string | null;
+  gramas: number | null;
+  comprimentoCm: number | null;
+  /** null = sem preço de venda: ela digita o valor na conta. */
+  precoVenda: number | null;
+};
+
+/**
+ * As peças que podem entrar na conta deste atendimento
+ * (`pecaVendavelNaConta`): inteiras e livres, ou já nesta conta. Em
+ * ordem natural de código.
+ *
+ * Lê as duas tabelas inteiras: "tem partes" e "tem item" são consultas
+ * sobre todas as peças, e são poucas.
+ */
+export async function listarPecasVendaveis(
+  atendimentoId: string,
+): Promise<PecaVendavel[]> {
+  const { supabase } = await exigirSessao();
+
+  const [pecas, itens] = await Promise.all([
+    supabase
+      .from("pecas_extensao")
+      .select("id, codigo, peca_mae_id, cor, textura, gramas, comprimento_cm, preco_venda"),
+    supabase
+      .from("atendimento_itens")
+      .select("peca_extensao_id, atendimento_id")
+      .not("peca_extensao_id", "is", null),
+  ]);
+
+  const erro = pecas.error ?? itens.error;
+
+  if (erro) {
+    throw new Error(`Não foi possível carregar as peças: ${erro.message}`);
+  }
+
+  const linhas = (pecas.data ?? []) as (Pick<
+    LinhaPeca,
+    "id" | "codigo" | "peca_mae_id" | "cor" | "textura" | "gramas" | "comprimento_cm" | "preco_venda"
+  >)[];
+
+  const desmembradas = idsDesmembradas(
+    linhas.map((linha) => ({ pecaMaeId: linha.peca_mae_id })),
+  );
+
+  const atendimentoDoItem = new Map(
+    ((itens.data ?? []) as { peca_extensao_id: string; atendimento_id: string }[]).map(
+      (item) => [item.peca_extensao_id, item.atendimento_id],
+    ),
+  );
+
+  return linhas
+    .filter((linha) =>
+      pecaVendavelNaConta(
+        {
+          temFilhas: desmembradas.has(linha.id),
+          atendimentoDoItem: atendimentoDoItem.get(linha.id) ?? null,
+        },
+        atendimentoId,
+      ),
+    )
+    .map((linha) => ({
+      id: linha.id,
+      codigo: linha.codigo,
+      cor: linha.cor,
+      textura: linha.textura,
+      gramas: numero(linha.gramas),
+      comprimentoCm: numero(linha.comprimento_cm),
+      precoVenda: numero(linha.preco_venda),
+    }))
+    .sort((a, b) => compararCodigos(a.codigo, b.codigo));
+}
+
+/** O que o fechamento da conta relê de cada peça escolhida. */
+export type PecaParaConta = {
+  id: string;
+  codigo: string;
+  temFilhas: boolean;
+  /** Atendimento do item que já aponta para a peça; null se nenhum. */
+  atendimentoDoItem: string | null;
+};
+
+/**
+ * Relê, no servidor, as peças que a tela mandou na conta. Peça que não
+ * existe (ou id que não é uuid) simplesmente não volta.
+ */
+export async function lerPecasParaConta(
+  ids: readonly string[],
+): Promise<PecaParaConta[]> {
+  if (ids.length === 0) return [];
+
+  const { supabase } = await exigirSessao();
+  const lista = [...ids];
+
+  const [pecas, filhas, itens] = await Promise.all([
+    supabase.from("pecas_extensao").select("id, codigo").in("id", lista),
+    supabase.from("pecas_extensao").select("peca_mae_id").in("peca_mae_id", lista),
+    supabase
+      .from("atendimento_itens")
+      .select("peca_extensao_id, atendimento_id")
+      .in("peca_extensao_id", lista),
+  ]);
+
+  const erro = pecas.error ?? filhas.error ?? itens.error;
+
+  if (erro) {
+    throw new Error(`Não foi possível conferir as peças: ${erro.message}`);
+  }
+
+  const maes = new Set(
+    ((filhas.data ?? []) as { peca_mae_id: string }[]).map((f) => f.peca_mae_id),
+  );
+
+  const atendimentoDoItem = new Map(
+    ((itens.data ?? []) as { peca_extensao_id: string; atendimento_id: string }[]).map(
+      (item) => [item.peca_extensao_id, item.atendimento_id],
+    ),
+  );
+
+  return ((pecas.data ?? []) as { id: string; codigo: string }[]).map((peca) => ({
+    id: peca.id,
+    codigo: peca.codigo,
+    temFilhas: maes.has(peca.id),
+    atendimentoDoItem: atendimentoDoItem.get(peca.id) ?? null,
+  }));
 }

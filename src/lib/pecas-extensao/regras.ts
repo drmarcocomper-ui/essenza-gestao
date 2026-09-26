@@ -1,5 +1,5 @@
 import { normalizar } from "@/lib/busca";
-import { formatarMoeda } from "@/lib/formatters";
+import { formatarData, formatarMoeda } from "@/lib/formatters";
 
 /**
  * Regras da seção Extensão da aba Produtos que não dependem do banco:
@@ -96,15 +96,149 @@ export const MAXIMO_PARTES = 10;
 
 export const MENSAGEM_QUANTIDADE_PARTES = `Desmembre em ${MINIMO_PARTES} a ${MAXIMO_PARTES} partes.`;
 
-/** O que decide as travas de uma peça: é mãe? é parte? tem custo? */
+/**
+ * A conta em que a peça entrou, quando entrou: o item de
+ * `atendimento_itens` com `peca_extensao_id` = esta peça (020). Uma peça,
+ * um item — então no máximo uma conta.
+ */
+export type ContaDaPeca = {
+  atendimentoId: string;
+  clienteId: string;
+  clienteNome: string;
+  /** Data do atendimento, 'AAAA-MM-DD'. */
+  data: string;
+  /** Existe lançamento com este `atendimento_id`. */
+  fechada: boolean;
+};
+
+/**
+ * Estado da peça. Nenhum é coluna (ver 018 e 020): tudo sai de "tem
+ * partes?" e "tem item? a conta dele tem lançamento?".
+ */
+export type EstadoPeca =
+  | "disponivel"
+  | "desmembrada"
+  | "na_conta_aberta"
+  | "vendida";
+
+/**
+ * Peça com partes nunca ganha item (`pecaVendavelNaConta`) e peça com
+ * item nunca é desmembrada (`travasDaPeca`), então as duas coisas não
+ * convivem. Se um dia conviverem no banco, a conta ganha: o que foi
+ * vendido é o fato que não se pode esconder.
+ */
+export function estadoDaPeca({
+  temFilhas,
+  conta,
+}: {
+  temFilhas: boolean;
+  conta: Pick<ContaDaPeca, "fechada"> | null;
+}): EstadoPeca {
+  if (conta) return conta.fechada ? "vendida" : "na_conta_aberta";
+
+  return temFilhas ? "desmembrada" : "disponivel";
+}
+
+/**
+ * Se a peça pode entrar na conta do atendimento `atendimentoId`: inteira
+ * (sem partes — a mãe desmembrada já virou as partes) e livre, ou já
+ * nesta mesma conta (conta reaberta, ou fechamento que falhou no meio).
+ *
+ * `atendimentoDoItem` é o atendimento do item que já aponta para a
+ * peça, ou null se não há item.
+ */
+export function pecaVendavelNaConta(
+  {
+    temFilhas,
+    atendimentoDoItem,
+  }: { temFilhas: boolean; atendimentoDoItem: string | null },
+  atendimentoId: string,
+) {
+  if (temFilhas) return false;
+
+  return atendimentoDoItem === null || atendimentoDoItem === atendimentoId;
+}
+
+/** "Esta peça está na conta de Maria em 12/09/2026" — sem ponto final. */
+function naContaDe(conta: ContaDaPeca) {
+  return `Esta peça está na conta de ${conta.clienteNome} em ${formatarData(conta.data)}`;
+}
+
+export function mensagemCodigoEmConta(conta: ContaDaPeca) {
+  return `${naContaDe(conta)}: o código não muda.`;
+}
+
+export function mensagemExclusaoEmConta(conta: ContaDaPeca) {
+  return `${naContaDe(conta)} e não pode ser excluída.`;
+}
+
+export function mensagemDesmembrarEmConta(conta: ContaDaPeca) {
+  return `${naContaDe(conta)} e não pode ser desmembrada.`;
+}
+
+/**
+ * O 23503 da FK da 020 quando a conta não pôde ser relida para dizer de
+ * quem é (a peça entrou e saiu da conta entre o toque e a releitura).
+ */
+export const MENSAGEM_EXCLUSAO_EM_CONTA =
+  "Esta peça está numa conta e não pode ser excluída.";
+
+/**
+ * Se o 23503 veio da FK de `atendimento_itens.peca_extensao_id` (020) —
+ * "is still referenced from table atendimento_itens" — e não da
+ * `peca_mae_id` da 018. As duas recusas pedem recados diferentes.
+ */
+export function referenciadaPorConta(
+  erro: { code?: string; message?: string; details?: string } | null,
+) {
+  if (erro?.code !== "23503") return false;
+
+  return /atendimento_itens/.test(`${erro.message ?? ""} ${erro.details ?? ""}`);
+}
+
+/**
+ * Desfazer apaga as partes, e parte que está numa conta não sai (o
+ * `on delete restrict` da 020 recusaria de qualquer jeito).
+ */
+export function mensagemDesfazerParteEmConta(codigoParte: string | null) {
+  return codigoParte
+    ? `A parte ${codigoParte} está numa conta: o desmembramento não pode ser desfeito.`
+    : "Uma das partes está numa conta: o desmembramento não pode ser desfeito.";
+}
+
+/**
+ * A peça escolhida na conta já é item de outro atendimento. A action
+ * recusa com esta frase, e o 23505 do índice único da 020 vira a mesma.
+ */
+export function mensagemPecaEmOutraConta(codigo: string | null) {
+  return codigo
+    ? `A peça ${codigo} já está em outra conta.`
+    : "A peça já está em outra conta.";
+}
+
+export function mensagemPecaDesmembradaNaConta(codigo: string) {
+  return `A peça ${codigo} foi desmembrada: escolha uma das partes.`;
+}
+
+export const MENSAGEM_PECA_SUMIU_DA_CONTA =
+  "Uma das peças de extensão não existe mais.";
+
+export const MENSAGEM_PECA_REPETIDA_NA_CONTA =
+  "A mesma peça de extensão entrou duas vezes na conta.";
+
+/** O que decide as travas de uma peça: é mãe? é parte? tem custo? está numa conta? */
 export type SituacaoPeca = {
   pecaMaeId: string | null;
   precoCompra: number | null;
   temFilhas: boolean;
+  /** A conta em que a peça entrou, aberta ou fechada; null se nenhuma. */
+  conta: ContaDaPeca | null;
 };
 
 export type TravasPeca = {
   codigoTravado: boolean;
+  /** null = o código é editável. */
+  motivoCodigoTravado: string | null;
   /** null = o preço de compra é editável. */
   motivoCustoTravado: string | null;
   /** null = a peça pode ser excluída. */
@@ -119,31 +253,50 @@ export type TravasPeca = {
  *
  * Parte com filhas ganha as duas travas; o motivo de exclusão mostrado é
  * o de ter filhas, porque o Desfazer da mãe também a recusaria.
+ *
+ * Peça numa conta — aberta ou fechada — não desmembra, não é excluída e
+ * não muda de código: o item da conta aponta para ela, e o código é o
+ * que a descrição do item ("Extensão 1254") diz. O motivo da conta vem
+ * antes dos outros, porque é o primeiro a resolver (reabrir a conta e
+ * tirar a peça). O preço de compra segue as regras de antes: o item
+ * grava o valor de venda, não o custo.
  */
 export function travasDaPeca({
   pecaMaeId,
   precoCompra,
   temFilhas,
+  conta,
 }: SituacaoPeca): TravasPeca {
   const ehParte = pecaMaeId !== null;
 
+  const motivoCodigoTravado = conta
+    ? mensagemCodigoEmConta(conta)
+    : temFilhas
+      ? MENSAGEM_CODIGO_TRAVADO
+      : null;
+
   return {
-    codigoTravado: temFilhas,
+    codigoTravado: motivoCodigoTravado !== null,
+    motivoCodigoTravado,
     motivoCustoTravado: temFilhas
       ? MENSAGEM_CUSTO_TRAVADO_MAE
       : ehParte
         ? MENSAGEM_CUSTO_TRAVADO_PARTE
         : null,
-    motivoExclusaoTravada: temFilhas
-      ? MENSAGEM_EXCLUSAO_TRAVADA
-      : ehParte
-        ? MENSAGEM_EXCLUSAO_PARTE
-        : null,
-    motivoNaoDesmembra: temFilhas
-      ? MENSAGEM_JA_DESMEMBRADA
-      : precoCompra === null
-        ? MENSAGEM_DESMEMBRAR_SEM_CUSTO
-        : null,
+    motivoExclusaoTravada: conta
+      ? mensagemExclusaoEmConta(conta)
+      : temFilhas
+        ? MENSAGEM_EXCLUSAO_TRAVADA
+        : ehParte
+          ? MENSAGEM_EXCLUSAO_PARTE
+          : null,
+    motivoNaoDesmembra: conta
+      ? mensagemDesmembrarEmConta(conta)
+      : temFilhas
+        ? MENSAGEM_JA_DESMEMBRADA
+        : precoCompra === null
+          ? MENSAGEM_DESMEMBRAR_SEM_CUSTO
+          : null,
   };
 }
 
@@ -360,6 +513,16 @@ export function pecaCasaComTermo(peca: { codigo: string }, termo: string) {
   if (!alvo) return true;
 
   return normalizar(peca.codigo).includes(alvo);
+}
+
+/**
+ * Busca da peça na conta: a chave do índice da 018 (`chaveCodigo`, trim
+ * + lower), "contém". Termo vazio casa com tudo.
+ */
+export function codigoContemTermo(codigo: string, termo: string) {
+  const alvo = chaveCodigo(termo);
+
+  return !alvo || chaveCodigo(codigo).includes(alvo);
 }
 
 /**
