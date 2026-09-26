@@ -38,11 +38,11 @@ function escondidos(container: HTMLElement, nome: string) {
   );
 }
 
-describe("FecharConta — bloco Extensão", () => {
+describe("FecharConta — bloco Peças de extensão", () => {
   it("sem peça vendável, o bloco não aparece", () => {
     montar([]);
 
-    expect(screen.queryByText("Extensão")).toBeNull();
+    expect(screen.queryByText("Peças de extensão")).toBeNull();
   });
 
   it("cada opção mostra código · cor · gramas · comprimento", () => {

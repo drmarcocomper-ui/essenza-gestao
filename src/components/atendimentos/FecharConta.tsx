@@ -130,7 +130,7 @@ type Props = {
   itensIniciais: LinhaItem[];
   /**
    * Peças que podem entrar nesta conta (`listarPecasVendaveis`): inteiras
-   * e livres, ou já nesta conta. Vazio esconde o bloco Extensão.
+   * e livres, ou já nesta conta. Vazio esconde o bloco Peças de extensão.
    */
   pecas: PecaVendavel[];
 };
@@ -604,10 +604,12 @@ export default function FecharConta({
 
         {/* Peça de extensão: a peça única do estoque (018), não o produto
             de catálogo "Extensão capilar", que continua nos Produtos. Só
-            aparece quando há peça que pode entrar nesta conta. */}
+            aparece quando há peça que pode entrar nesta conta. Não se chama
+            só "Extensão" porque esse já é o bloco da categoria de serviços
+            (manutenção, revisão...), na mesma tela. */}
         {pecas.length > 0 && (
           <GrupoDeChips
-            rotulo="Extensão"
+            rotulo="Peças de extensão"
             escolhidos={
               linhas.filter((linha) => linha.tipo === "peca_extensao").length
             }
