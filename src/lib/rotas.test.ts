@@ -24,7 +24,11 @@ const APP = path.join(RAIZ, "src/app");
  * rota de propósito — aí o caminho entra aqui, com o motivo escrito ao
  * lado, e sai assim que a rota nascer.
  */
-const ROTAS_PENDENTES: string[] = [];
+const ROTAS_PENDENTES: string[] = [
+  // A lista de produtos chega um commit antes do formulário.
+  "/produtos/novo",
+  "/produtos/:dyn/editar",
+];
 
 /** Arquivos de código onde um link pode estar escrito. */
 function arquivosDeCodigo(dir: string): string[] {
