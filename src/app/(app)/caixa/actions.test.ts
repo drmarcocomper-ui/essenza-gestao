@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Lancamento } from "@/lib/caixa/consultas";
-import { MENSAGEM_COMPETENCIA_TRAVADA } from "@/lib/caixa/schema";
+import { MENSAGEM_COMPETENCIA_TRAVADA } from "@/lib/caixa/travas";
 
 const { obterLancamento, update, redirect } = vi.hoisted(() => ({
   obterLancamento: vi.fn(),

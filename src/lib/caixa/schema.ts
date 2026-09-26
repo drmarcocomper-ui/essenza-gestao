@@ -46,26 +46,6 @@ export function dataCaixaNoFuturo(data: string) {
   return data > hoje();
 }
 
-export const MENSAGEM_COMPETENCIA_TRAVADA =
-  "Parcela de atendimento: a competência segue a data do atendimento.";
-
-/**
- * Se a competência do lançamento está presa à data do atendimento.
- *
- * Linha com `atendimento_id` nasceu do fechamento de conta, e todas as
- * parcelas da conta têm a competência do dia em que o serviço foi
- * prestado. Trocar a de uma só pelo Caixa separa a parcela da própria
- * venda — em 09/2026 duas linhas ficaram assim. Lançamento manual
- * (`atendimento_id` nulo) continua editável por inteiro.
- *
- * O formulário usa para travar o campo; a action, para recusar.
- */
-export function competenciaTravada(lancamento: {
-  atendimento_id: string | null;
-}) {
-  return lancamento.atendimento_id !== null;
-}
-
 /** Campo de texto opcional: string vazia vira null, não "". */
 const textoOpcional = (max: number) =>
   z

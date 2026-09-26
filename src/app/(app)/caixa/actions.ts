@@ -6,14 +6,16 @@ import { redirect } from "next/navigation";
 import { exigirSessao } from "@/lib/auth";
 import { obterLancamento } from "@/lib/caixa/consultas";
 import {
-  competenciaTravada,
   confirmacaoRecebimentoSchema,
   errosPorCampo,
-  MENSAGEM_COMPETENCIA_TRAVADA,
   lancamentoSchema,
   lerFormulario,
   type CampoLancamento,
 } from "@/lib/caixa/schema";
+import {
+  lancamentoDaConta,
+  MENSAGEM_COMPETENCIA_TRAVADA,
+} from "@/lib/caixa/travas";
 import { listarClientes } from "@/lib/clientes/consultas";
 
 export type EstadoFormulario = {
@@ -91,7 +93,7 @@ export async function atualizarLancamento(
   }
 
   if (
-    competenciaTravada(atual) &&
+    lancamentoDaConta(atual) &&
     validacao.data.data_competencia !== atual.data_competencia
   ) {
     return {

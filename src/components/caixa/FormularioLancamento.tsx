@@ -9,9 +9,7 @@ import CampoValor from "@/components/caixa/CampoValor";
 import type { Categoria, Lancamento } from "@/lib/caixa/consultas";
 import { hoje } from "@/lib/caixa/mes";
 import {
-  competenciaTravada,
   FORMAS_PAGAMENTO,
-  MENSAGEM_COMPETENCIA_TRAVADA,
   STATUS,
   TIPOS,
   TITULARIDADES,
@@ -19,6 +17,10 @@ import {
   type StatusLancamento,
   type TipoLancamento,
 } from "@/lib/caixa/schema";
+import {
+  lancamentoDaConta,
+  MENSAGEM_COMPETENCIA_TRAVADA,
+} from "@/lib/caixa/travas";
 import { valorParaCampo } from "@/lib/formatters";
 
 type Props = {
@@ -76,7 +78,7 @@ export default function FormularioLancamento({
 
   const entrada = tipo === "Entrada";
   const pago = status === "Pago";
-  const travada = lancamento ? competenciaTravada(lancamento) : false;
+  const travada = lancamento ? lancamentoDaConta(lancamento) : false;
   const idInstituicoes = useId();
 
   /**
