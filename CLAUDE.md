@@ -10,8 +10,8 @@ não será comercializado.
 - Mobile-first sempre. A usuária opera de celular, em pé, entre
   atendimentos, com uma mão. Alvo de toque mínimo 44px.
 - Português do Brasil em toda a UI. Moeda R$, datas dd/MM/yyyy.
-- Escopo congelado na Fase 1. Não implementar despesas, movimentação
-  de estoque, comissões, NF-e, notificação push ou API do WhatsApp.
+- Escopo congelado na Fase 1. Não implementar despesas, comissões,
+  NF-e, notificação push ou API do WhatsApp.
 
 ## Stack
 Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind 4 + Supabase.
