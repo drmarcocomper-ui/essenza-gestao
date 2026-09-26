@@ -26,7 +26,7 @@ export default async function EditarPecaPage({
     notFound();
   }
 
-  const [desmembrada, { cores, texturas }] = await Promise.all([
+  const [desmembrada, { cores, texturas, origens }] = await Promise.all([
     pecaTemFilhas(peca.id),
     listarSugestoes(),
   ]);
@@ -44,6 +44,7 @@ export default async function EditarPecaPage({
         codigoTravado={desmembrada}
         cores={cores}
         texturas={texturas}
+        origens={origens}
         rotuloEnviar="Salvar"
       />
 

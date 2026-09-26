@@ -16,6 +16,10 @@ function peca(codigo: string, extra: Partial<PecaExtensao> = {}): PecaExtensao {
     comprimentoCm: 55,
     precoCompra: 300,
     precoVenda: 600,
+    origem: null,
+    numeroOrigem: null,
+    dataEntrada: null,
+    observacoes: null,
     ...extra,
   };
 }

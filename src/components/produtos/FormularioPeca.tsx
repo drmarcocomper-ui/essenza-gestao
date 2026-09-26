@@ -4,6 +4,7 @@ import { useActionState, useId, useState } from "react";
 import Link from "next/link";
 
 import type { EstadoFormularioPeca } from "@/app/(app)/produtos/extensao/actions";
+import { hoje } from "@/lib/caixa/mes";
 import { mascararMoeda, valorParaCampo } from "@/lib/formatters";
 import type { PecaExtensao } from "@/lib/pecas-extensao/consultas";
 import { MENSAGEM_CODIGO_TRAVADO } from "@/lib/pecas-extensao/regras";
@@ -19,6 +20,7 @@ type Props = {
   codigoTravado?: boolean;
   cores: string[];
   texturas: string[];
+  origens: string[];
   rotuloEnviar: string;
 };
 
@@ -46,11 +48,13 @@ export default function FormularioPeca({
   codigoTravado = false,
   cores,
   texturas,
+  origens,
   rotuloEnviar,
 }: Props) {
   const [estado, enviar, enviando] = useActionState(acao, ESTADO_INICIAL);
   const idCores = useId();
   const idTexturas = useId();
+  const idOrigens = useId();
 
   // Controlados por causa da máscara (a mesma do Caixa: os dígitos entram
   // pela direita). Sobrevivem a um erro do servidor, que não remonta o form.
@@ -227,7 +231,72 @@ export default function FormularioPeca({
             }
             placeholder="0,00"
             autoComplete="off"
-            enterKeyHint="done"
+            enterKeyHint="next"
+          />
+        )}
+      </Campo>
+
+      <Campo rotulo="Origem" erro={estado.erros?.origem}>
+        {(props) => (
+          <>
+            <input
+              {...props}
+              name="origem"
+              type="text"
+              defaultValue={valor("origem", peca?.origem)}
+              list={idOrigens}
+              placeholder="Fornecedor"
+              autoCapitalize="words"
+              autoComplete="off"
+              enterKeyHint="next"
+            />
+            <datalist id={idOrigens}>
+              {origens.map((origem) => (
+                <option key={origem} value={origem} />
+              ))}
+            </datalist>
+          </>
+        )}
+      </Campo>
+
+      <Campo rotulo="Nº de origem" erro={estado.erros?.numero_origem}>
+        {(props) => (
+          <input
+            {...props}
+            name="numero_origem"
+            type="text"
+            defaultValue={valor("numero_origem", peca?.numeroOrigem)}
+            placeholder="Lacre do fornecedor"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            enterKeyHint="next"
+          />
+        )}
+      </Campo>
+
+      <Campo rotulo="Data de entrada" erro={estado.erros?.data_entrada}>
+        {(props) => (
+          <input
+            {...props}
+            name="data_entrada"
+            type="date"
+            // Nasce vazia na peça nova: data não informada é NULL, e
+            // "hoje" preenchido sozinho seria um dado que ela não deu.
+            defaultValue={valor("data_entrada", peca?.dataEntrada)}
+            // Só dica para o calendário; quem recusa o futuro é o schema.
+            max={hoje()}
+          />
+        )}
+      </Campo>
+
+      <Campo rotulo="Observações" erro={estado.erros?.observacoes} multilinha>
+        {(props) => (
+          <textarea
+            {...props}
+            name="observacoes"
+            defaultValue={valor("observacoes", peca?.observacoes)}
+            rows={3}
           />
         )}
       </Campo>
@@ -267,6 +336,7 @@ function Campo({
   obrigatorio,
   prefixo,
   sufixo,
+  multilinha,
   children,
 }: {
   rotulo: string;
@@ -275,6 +345,7 @@ function Campo({
   obrigatorio?: boolean;
   prefixo?: string;
   sufixo?: string;
+  multilinha?: boolean;
   children: (props: PropsControle) => React.ReactNode;
 }) {
   const id = useId();
@@ -291,7 +362,9 @@ function Campo({
       erro
         ? "border-rose-400 focus:border-rose-500"
         : "border-neutral-300 focus:border-rose-500"
-    } ${prefixo ? "pl-11 tabular-nums" : ""} ${sufixo ? "pr-11 tabular-nums" : ""}`,
+    } ${prefixo ? "pl-11 tabular-nums" : ""} ${sufixo ? "pr-11 tabular-nums" : ""} ${
+      multilinha ? "h-auto py-2.5 leading-relaxed" : ""
+    }`,
     ...(erro ? { "aria-invalid": true as const } : {}),
     ...(descritores ? { "aria-describedby": descritores } : {}),
   };

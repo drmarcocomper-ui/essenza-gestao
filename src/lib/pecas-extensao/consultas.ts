@@ -18,6 +18,13 @@ export type PecaExtensao = {
   comprimentoCm: number | null;
   precoCompra: number | null;
   precoVenda: number | null;
+  /** Fornecedor, texto livre. */
+  origem: string | null;
+  /** Lacre / número individual do fornecedor. */
+  numeroOrigem: string | null;
+  /** 'AAAA-MM-DD', como a coluna `date` devolve. */
+  dataEntrada: string | null;
+  observacoes: string | null;
 };
 
 type NumericBanco = string | number | null;
@@ -32,10 +39,14 @@ type LinhaPeca = {
   comprimento_cm: NumericBanco;
   preco_compra: NumericBanco;
   preco_venda: NumericBanco;
+  origem: string | null;
+  numero_origem: string | null;
+  data_entrada: string | null;
+  observacoes: string | null;
 };
 
 const COLUNAS =
-  "id, codigo, peca_mae_id, cor, textura, gramas, comprimento_cm, preco_compra, preco_venda";
+  "id, codigo, peca_mae_id, cor, textura, gramas, comprimento_cm, preco_compra, preco_venda, origem, numero_origem, data_entrada, observacoes";
 
 function numero(valor: NumericBanco) {
   return valor === null ? null : Number(valor);
@@ -52,6 +63,10 @@ function paraPeca(linha: LinhaPeca): PecaExtensao {
     comprimentoCm: numero(linha.comprimento_cm),
     precoCompra: numero(linha.preco_compra),
     precoVenda: numero(linha.preco_venda),
+    origem: linha.origem,
+    numeroOrigem: linha.numero_origem,
+    dataEntrada: linha.data_entrada,
+    observacoes: linha.observacoes,
   };
 }
 
@@ -132,25 +147,31 @@ export async function listarCodigos(): Promise<PecaIdentificavel[]> {
   return (data ?? []) as PecaIdentificavel[];
 }
 
-/** Cores e texturas já gravadas, para o `<datalist>` do formulário. */
+/** Cores, texturas e origens já gravadas, para os `<datalist>` do formulário. */
 export async function listarSugestoes(): Promise<{
   cores: string[];
   texturas: string[];
+  origens: string[];
 }> {
   const { supabase } = await exigirSessao();
 
   const { data, error } = await supabase
     .from("pecas_extensao")
-    .select("cor, textura");
+    .select("cor, textura, origem");
 
   if (error) {
     throw new Error(`Não foi possível carregar as sugestões: ${error.message}`);
   }
 
-  const linhas = (data ?? []) as { cor: string | null; textura: string | null }[];
+  const linhas = (data ?? []) as {
+    cor: string | null;
+    textura: string | null;
+    origem: string | null;
+  }[];
 
   return {
     cores: valoresDistintos(linhas.map((linha) => linha.cor)),
     texturas: valoresDistintos(linhas.map((linha) => linha.textura)),
+    origens: valoresDistintos(linhas.map((linha) => linha.origem)),
   };
 }

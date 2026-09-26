@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { hoje } from "@/lib/caixa/mes";
 import { moedaParaNumero } from "@/lib/formatters";
 
 /** Teto de numeric(10,2): preços e gramas. */
@@ -15,6 +16,25 @@ const textoOpcional = (max: number) =>
     .trim()
     .max(max, `Máximo de ${max} caracteres`)
     .transform((v) => (v === "" ? null : v));
+
+export const MENSAGEM_ENTRADA_FUTURA =
+  "A data de entrada não pode ser no futuro.";
+
+/**
+ * Data de entrada: opcional, e nunca no futuro — a peça já chegou. "Hoje"
+ * é o do fuso do salão (`hoje()`), e as duas datas estão em
+ * 'AAAA-MM-DD': comparar como texto é comparar como data.
+ */
+const dataEntrada = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : v))
+  .refine((v) => v === null || z.iso.date().safeParse(v).success, {
+    message: "Data inválida",
+  })
+  .refine((v) => v === null || v <= hoje(), {
+    message: MENSAGEM_ENTRADA_FUTURA,
+  });
 
 /** Mais casas do que a coluna guarda: o banco arredondaria calado. */
 function casasDemais(numero: number, casas: number) {
@@ -105,9 +125,7 @@ const preco = z.string().transform((bruto, ctx) => {
  * Peça de extensão, como a seção Extensão cadastra e edita.
  *
  * `peca_mae_id` não é campo de formulário: o cadastro grava NULL e a
- * edição nunca toca nele (ver 018). `numero_origem`, `origem`,
- * `data_entrada` e `observacoes` existem na tabela, mas não estão nesta
- * tela.
+ * edição nunca toca nele (ver 018).
  */
 export const pecaSchema = z.object({
   // Trim nas pontas e nada mais: 1254-B fica 1254-B, como ela digitou.
@@ -123,6 +141,13 @@ export const pecaSchema = z.object({
   comprimento_cm: medida(1, MAXIMO_6_1, "cm"),
   preco_compra: preco,
   preco_venda: preco,
+
+  origem: textoOpcional(80),
+  // Lacre do fornecedor: texto livre, sem conferência de repetido.
+  numero_origem: textoOpcional(40),
+  data_entrada: dataEntrada,
+  // Trim só nas pontas: as quebras de linha do meio ficam.
+  observacoes: textoOpcional(1000),
 });
 
 export type DadosPeca = z.infer<typeof pecaSchema>;
@@ -135,6 +160,10 @@ export const CAMPOS_PECA = [
   "comprimento_cm",
   "preco_compra",
   "preco_venda",
+  "origem",
+  "numero_origem",
+  "data_entrada",
+  "observacoes",
 ] as const;
 
 export type CampoPeca = (typeof CAMPOS_PECA)[number];

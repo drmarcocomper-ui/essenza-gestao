@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NovaPecaPage() {
-  const { cores, texturas } = await listarSugestoes();
+  const { cores, texturas, origens } = await listarSugestoes();
 
   return (
     <div className="space-y-4">
@@ -21,6 +21,7 @@ export default async function NovaPecaPage() {
         acao={criarPeca}
         cores={cores}
         texturas={texturas}
+        origens={origens}
         rotuloEnviar="Cadastrar"
       />
     </div>

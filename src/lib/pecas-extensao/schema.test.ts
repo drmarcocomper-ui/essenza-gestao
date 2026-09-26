@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { novaPeca, pecaSchema, type CampoPeca } from "./schema";
+import { hoje } from "@/lib/caixa/mes";
+
+import {
+  MENSAGEM_ENTRADA_FUTURA,
+  novaPeca,
+  pecaSchema,
+  type CampoPeca,
+} from "./schema";
+
+/**
+ * Relativa a hoje, não fixa: a regra do futuro só se testa contra o
+ * relógio (mesmo raciocínio do schema.test do Caixa).
+ */
+function somarDias(data: string, dias: number) {
+  const [ano, mes, dia] = data.split("-").map(Number);
+
+  return new Date(Date.UTC(ano, mes - 1, dia + dias))
+    .toISOString()
+    .slice(0, 10);
+}
 
 function validar(campos: Partial<Record<CampoPeca, string>>) {
   return pecaSchema.safeParse({
@@ -11,6 +30,10 @@ function validar(campos: Partial<Record<CampoPeca, string>>) {
     comprimento_cm: "",
     preco_compra: "",
     preco_venda: "",
+    origem: "",
+    numero_origem: "",
+    data_entrada: "",
+    observacoes: "",
     ...campos,
   });
 }
@@ -35,7 +58,15 @@ describe("pecaSchema — código", () => {
 
 describe("pecaSchema — vazio vira NULL", () => {
   it("todos os opcionais em branco gravam NULL", () => {
-    expect(validar({ cor: "  ", gramas: " " }).data).toEqual({
+    expect(
+      validar({
+        cor: "  ",
+        gramas: " ",
+        origem: "   ",
+        numero_origem: " ",
+        observacoes: "  \n  ",
+      }).data,
+    ).toEqual({
       codigo: "1254",
       cor: null,
       textura: null,
@@ -43,7 +74,61 @@ describe("pecaSchema — vazio vira NULL", () => {
       comprimento_cm: null,
       preco_compra: null,
       preco_venda: null,
+      origem: null,
+      numero_origem: null,
+      data_entrada: null,
+      observacoes: null,
     });
+  });
+});
+
+describe("pecaSchema — origem, nº de origem e observações", () => {
+  it("gravam com trim", () => {
+    const dados = validar({
+      origem: "  Sul do Brasil ",
+      numero_origem: " A-0091 ",
+    }).data;
+
+    expect(dados?.origem).toBe("Sul do Brasil");
+    expect(dados?.numero_origem).toBe("A-0091");
+  });
+
+  it("observação preserva a quebra de linha do meio", () => {
+    expect(
+      validar({ observacoes: "  Lacre rompido.\nTroca com a Ana.\n " }).data
+        ?.observacoes,
+    ).toBe("Lacre rompido.\nTroca com a Ana.");
+  });
+
+  it("respeitam o tamanho máximo", () => {
+    expect(erroDe("origem", "x".repeat(81))).toBe("Máximo de 80 caracteres");
+    expect(erroDe("numero_origem", "x".repeat(41))).toBe("Máximo de 40 caracteres");
+    expect(erroDe("observacoes", "x".repeat(1001))).toBe(
+      "Máximo de 1000 caracteres",
+    );
+  });
+});
+
+describe("pecaSchema — data de entrada", () => {
+  it("vazia vira NULL", () => {
+    expect(validar({ data_entrada: "" }).data?.data_entrada).toBeNull();
+  });
+
+  it("aceita hoje e o passado", () => {
+    expect(validar({ data_entrada: hoje() }).data?.data_entrada).toBe(hoje());
+    expect(validar({ data_entrada: "2026-01-15" }).data?.data_entrada).toBe(
+      "2026-01-15",
+    );
+  });
+
+  it("recusa o futuro", () => {
+    expect(erroDe("data_entrada", somarDias(hoje(), 1))).toBe(
+      MENSAGEM_ENTRADA_FUTURA,
+    );
+  });
+
+  it("recusa data que não existe", () => {
+    expect(erroDe("data_entrada", "2026-02-30")).toBe("Data inválida");
   });
 });
 
