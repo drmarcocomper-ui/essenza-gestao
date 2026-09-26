@@ -1,9 +1,11 @@
 import { normalizar } from "@/lib/busca";
+import { formatarMoeda } from "@/lib/formatters";
 
 /**
  * Regras da seção Extensão da aba Produtos que não dependem do banco:
- * duplicidade de código, ordem da lista, busca e sugestões de cor e
- * textura.
+ * duplicidade de código, ordem da lista, busca, sugestões de cor e
+ * textura, e o desmembramento (travas, soma dos custos, códigos das
+ * partes).
  */
 
 /**
@@ -57,6 +59,205 @@ export const MENSAGEM_CODIGO_TRAVADO =
 
 export const MENSAGEM_EXCLUSAO_TRAVADA =
   "Peça desmembrada não pode ser excluída: as partes apontam para ela.";
+
+/**
+ * Parte não sai sozinha nem muda de custo: a soma das partes é o custo
+ * da mãe. Para corrigir, desfaz-se o desmembramento inteiro.
+ */
+export const MENSAGEM_EXCLUSAO_PARTE =
+  "Parte não pode ser excluída sozinha: a soma das partes tem de fechar com o custo da mãe; use Desfazer desmembramento na peça mãe.";
+
+export const MENSAGEM_CUSTO_TRAVADO_MAE =
+  "Peça desmembrada: o preço de compra não muda, porque as partes somam ele.";
+
+export const MENSAGEM_CUSTO_TRAVADO_PARTE =
+  "Parte de peça desmembrada: o preço de compra não muda, porque a soma das partes tem de fechar com o custo da mãe; use Desfazer desmembramento na peça mãe.";
+
+export const MENSAGEM_JA_DESMEMBRADA =
+  "Esta peça já foi desmembrada. Para refazer, use Desfazer desmembramento.";
+
+export const MENSAGEM_DESMEMBRAR_SEM_CUSTO =
+  "Para desmembrar, informe primeiro o preço de compra da peça.";
+
+export const MENSAGEM_SEM_PARTES = "Esta peça não tem partes.";
+
+export const MENSAGEM_DESFAZER_TRAVADO =
+  "Uma das partes também foi desmembrada: desfaça o desmembramento dela primeiro.";
+
+export const MENSAGEM_CODIGO_REPETIDO_PARTES = "Código repetido entre as partes.";
+
+export const MENSAGEM_CUSTO_PARTE_OBRIGATORIO =
+  "Informe o preço de compra da parte.";
+
+export const MINIMO_PARTES = 2;
+export const MAXIMO_PARTES = 10;
+
+export const MENSAGEM_QUANTIDADE_PARTES = `Desmembre em ${MINIMO_PARTES} a ${MAXIMO_PARTES} partes.`;
+
+/** O que decide as travas de uma peça: é mãe? é parte? tem custo? */
+export type SituacaoPeca = {
+  pecaMaeId: string | null;
+  precoCompra: number | null;
+  temFilhas: boolean;
+};
+
+export type TravasPeca = {
+  codigoTravado: boolean;
+  /** null = o preço de compra é editável. */
+  motivoCustoTravado: string | null;
+  /** null = a peça pode ser excluída. */
+  motivoExclusaoTravada: string | null;
+  /** null = a peça pode ser desmembrada. */
+  motivoNaoDesmembra: string | null;
+};
+
+/**
+ * Todas as travas numa função só, usada pela tela (o que mostrar) e pela
+ * action (o que recusar) — as duas não podem discordar.
+ *
+ * Parte com filhas ganha as duas travas; o motivo de exclusão mostrado é
+ * o de ter filhas, porque o Desfazer da mãe também a recusaria.
+ */
+export function travasDaPeca({
+  pecaMaeId,
+  precoCompra,
+  temFilhas,
+}: SituacaoPeca): TravasPeca {
+  const ehParte = pecaMaeId !== null;
+
+  return {
+    codigoTravado: temFilhas,
+    motivoCustoTravado: temFilhas
+      ? MENSAGEM_CUSTO_TRAVADO_MAE
+      : ehParte
+        ? MENSAGEM_CUSTO_TRAVADO_PARTE
+        : null,
+    motivoExclusaoTravada: temFilhas
+      ? MENSAGEM_EXCLUSAO_TRAVADA
+      : ehParte
+        ? MENSAGEM_EXCLUSAO_PARTE
+        : null,
+    motivoNaoDesmembra: temFilhas
+      ? MENSAGEM_JA_DESMEMBRADA
+      : precoCompra === null
+        ? MENSAGEM_DESMEMBRAR_SEM_CUSTO
+        : null,
+  };
+}
+
+/**
+ * Reais → centavos inteiros. Toda conta de custo passa por aqui: somar
+ * float (0,1 + 0,2 = 0,30000000000000004) e comparar daria "não fecha"
+ * numa conta que fecha.
+ */
+export function paraCentavos(valor: number) {
+  return Math.round(valor * 100);
+}
+
+export function somarCentavos(valores: readonly number[]) {
+  return valores.reduce((soma, valor) => soma + paraCentavos(valor), 0);
+}
+
+export type ConferenciaCustos = {
+  somaCentavos: number;
+  maeCentavos: number;
+  /** Custo da mãe menos a soma: positivo falta, negativo sobra. */
+  diferencaCentavos: number;
+  situacao: "fecha" | "faltam" | "sobram";
+};
+
+/** Custo em branco não entra na soma — quem exige o custo é o schema. */
+export function conferirCustos(
+  custosPartes: readonly (number | null)[],
+  custoMae: number,
+): ConferenciaCustos {
+  const somaCentavos = somarCentavos(
+    custosPartes.filter((custo): custo is number => custo !== null),
+  );
+  const maeCentavos = paraCentavos(custoMae);
+  const diferencaCentavos = maeCentavos - somaCentavos;
+
+  return {
+    somaCentavos,
+    maeCentavos,
+    diferencaCentavos,
+    situacao:
+      diferencaCentavos === 0 ? "fecha" : diferencaCentavos > 0 ? "faltam" : "sobram",
+  };
+}
+
+function reais(centavos: number) {
+  return formatarMoeda(centavos / 100);
+}
+
+/** "fecha", "faltam R$ 10,00" ou "sobram R$ 10,00". */
+export function textoConferencia({ diferencaCentavos, situacao }: ConferenciaCustos) {
+  if (situacao === "fecha") return "fecha";
+
+  return `${situacao} ${reais(Math.abs(diferencaCentavos))}`;
+}
+
+export function mensagemSomaNaoFecha(conferencia: ConferenciaCustos) {
+  return `A soma dos custos das partes (${reais(conferencia.somaCentavos)}) não fecha com o custo da peça (${reais(conferencia.maeCentavos)}): ${textoConferencia(conferencia)}.`;
+}
+
+const LETRAS = "abcdefghijklmnopqrstuvwxyz";
+
+/**
+ * Códigos sugeridos para as partes, na caixa da mãe:
+ *   termina em dígito → 1254-a, 1254-b, 1254-c…
+ *   termina em letra  → 1254-a1, 1254-a2, 1254-a3…
+ * Qualquer outro fim (1254-) ganha a letra direto: 1254-a. É só
+ * sugestão — ela edita.
+ */
+export function sugerirCodigos(codigoMae: string, quantidade: number) {
+  const base = codigoMae.trim();
+
+  return Array.from({ length: quantidade }, (_, indice) => {
+    if (/\p{L}$/u.test(base)) return `${base}${indice + 1}`;
+    if (/\d$/.test(base)) return `${base}-${LETRAS[indice]}`;
+
+    return `${base}${LETRAS[indice]}`;
+  });
+}
+
+/**
+ * Posições das partes cujo código repete o de uma parte anterior, com a
+ * mesma chave do índice (trim + lower). A primeira ocorrência fica livre;
+ * código em branco é assunto do schema.
+ */
+export function indicesCodigoRepetido(codigos: readonly string[]) {
+  const vistos = new Set<string>();
+  const repetidos: number[] = [];
+
+  codigos.forEach((codigo, indice) => {
+    const chave = chaveCodigo(codigo);
+
+    if (!chave) return;
+
+    if (vistos.has(chave)) repetidos.push(indice);
+    else vistos.add(chave);
+  });
+
+  return repetidos;
+}
+
+/**
+ * Qual código o 23505 recusou, lido do `details` do Postgres —
+ * `Key (lower(TRIM(BOTH FROM codigo)))=(1254-a) already exists.` —, e
+ * devolvido como ela escreveu, se for de uma das partes. null se o
+ * formato não for reconhecido.
+ */
+export function codigoDoDuplicado(
+  detalhe: string | null | undefined,
+  codigos: readonly string[],
+) {
+  const chave = detalhe?.match(/=\((.*)\) already exists/)?.[1];
+
+  if (!chave) return null;
+
+  return codigos.find((codigo) => chaveCodigo(codigo) === chave) ?? chave;
+}
 
 /** Ordem natural: 999 < 1254 < 1254-a < 1254-a1 < 1254-b. */
 export function compararCodigos(a: string, b: string) {
