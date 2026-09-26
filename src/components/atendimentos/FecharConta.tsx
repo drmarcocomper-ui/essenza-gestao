@@ -32,19 +32,53 @@ import type {
   ProdutoCatalogo,
   ServicoCatalogo,
 } from "@/lib/atendimentos/consultas";
+import {
+  decidirProdutoPorNome,
+  sugerirProdutos,
+  type ProdutoConferivel,
+} from "@/lib/atendimentos/produtos";
+import { jaEscolhido as nomeJaEscolhido } from "@/lib/atendimentos/servicos";
+import { normalizar } from "@/lib/busca";
 import { hoje } from "@/lib/caixa/mes";
 import { mascararMoeda, moedaParaNumero } from "@/lib/formatters";
 import { agruparPorCategoria } from "@/lib/servicos/grupos";
 
 export type LinhaItem = {
   tipo: "servico" | "produto";
-  /** `servico_id` ou `produto_id`. É a chave da linha na tela. */
+  /** `servico_id` ou `produto_id`. Vazio no produto novo. */
   refId: string;
   nome: string;
   quantidade: number;
   /** Mascarado, como ela digita. Vazio é "sem valor", nunca zero. */
   valor: string;
+  /**
+   * Produto fora do catálogo, confirmado na pergunta. A action cadastra
+   * antes de gravar o item.
+   */
+  novo?: boolean;
 };
+
+/**
+ * A chave da linha na tela. Produto novo ainda não tem id, então é o
+ * nome normalizado que o distingue — o mesmo critério que impede o
+ * mesmo nome de entrar duas vezes.
+ */
+function chaveDaLinha(linha: LinhaItem) {
+  return linha.novo
+    ? `novo:${normalizar(linha.nome)}`
+    : `${linha.tipo}:${linha.refId}`;
+}
+
+/** Produto do catálogo como linha da conta, com o preço como sugestão. */
+function linhaDoProduto(produto: ProdutoCatalogo): LinhaItem {
+  return {
+    tipo: "produto",
+    refId: produto.id,
+    nome: produto.nome,
+    quantidade: 1,
+    valor: paraCampo(produto.preco),
+  };
+}
 
 type LinhaForma = {
   chave: number;
@@ -61,6 +95,8 @@ type Props = {
   acao: (estado: EstadoConta, formData: FormData) => Promise<EstadoConta>;
   servicos: ServicoCatalogo[];
   produtos: ProdutoCatalogo[];
+  /** A tabela `produtos` inteira, para conferir o nome digitado. */
+  todosProdutos: ProdutoConferivel[];
   itensIniciais: LinhaItem[];
 };
 
@@ -89,6 +125,7 @@ export default function FecharConta({
   acao,
   servicos,
   produtos,
+  todosProdutos,
   itensIniciais,
 }: Props) {
   const [estado, enviar, enviando] = useActionState(acao, ESTADO_INICIAL);
@@ -97,10 +134,17 @@ export default function FecharConta({
   const [formas, setFormas] = useState<LinhaForma[]>([]);
   const [dataCaixa, setDataCaixa] = useState(hoje());
 
+  const [outroProduto, setOutroProduto] = useState("");
+  /** Nome à espera do "sim" para virar produto novo no catálogo. */
+  const [perguntando, setPerguntando] = useState<string | null>(null);
+  /** Por que o nome digitado não pode entrar (desativado, ambíguo...). */
+  const [avisoProduto, setAvisoProduto] = useState<string | null>(null);
+
   // Duas formas podem ser da mesma instituição, então a chave não pode
   // sair do conteúdo da linha.
   const proximaChave = useRef(0);
   const idData = useId();
+  const idOutroProduto = useId();
 
   const itensValorados = linhas.map((linha) => ({
     quantidade: linha.quantidade,
@@ -130,16 +174,93 @@ export default function FecharConta({
     linhas.some((linha) => linha.tipo === tipo && linha.refId === refId);
 
   function alternar(linha: LinhaItem) {
+    const chave = chaveDaLinha(linha);
+
     setLinhas((atuais) =>
-      atuais.some(
-        (atual) => atual.tipo === linha.tipo && atual.refId === linha.refId,
-      )
-        ? atuais.filter(
-            (atual) =>
-              !(atual.tipo === linha.tipo && atual.refId === linha.refId),
-          )
+      atuais.some((atual) => chaveDaLinha(atual) === chave)
+        ? atuais.filter((atual) => chaveDaLinha(atual) !== chave)
         : [...atuais, linha],
     );
+  }
+
+  const produtosNovos = linhas.filter((linha) => linha.novo);
+
+  /** Sugestões para a pergunta, sem o que já está na conta. */
+  const sugestoes = perguntando
+    ? sugerirProdutos(
+        todosProdutos.filter((produto) => !escolhido("produto", produto.id)),
+        perguntando,
+      )
+    : [];
+
+  function limparOutroProduto() {
+    setOutroProduto("");
+    setPerguntando(null);
+  }
+
+  /** Entra o produto do catálogo — pelo nome digitado ou pela sugestão. */
+  function adicionarDoCatalogo(id: string, nome: string) {
+    const doCatalogo = produtos.find((produto) => produto.id === id);
+
+    setLinhas((atuais) => [
+      ...atuais,
+      doCatalogo
+        ? linhaDoProduto(doCatalogo)
+        : linhaDoProduto({ id, nome, preco: null }),
+    ]);
+    limparOutroProduto();
+  }
+
+  /**
+   * Mesmo caminho do serviço na 4A: o nome é conferido na tabela inteira
+   * pelo nome normalizado antes de qualquer pergunta. O que casa com um
+   * produto de venda ativo entra como ele; o que casa com algo que não
+   * pode entrar vira aviso; só o que não casa com nada pergunta se é
+   * produto novo. O servidor confere de novo ao salvar.
+   */
+  function adicionarOutroProduto() {
+    const nome = outroProduto.trim();
+
+    setAvisoProduto(null);
+
+    const naConta = linhas.filter((linha) => linha.tipo === "produto");
+
+    if (nome.length < 2 || nomeJaEscolhido(naConta, nome)) {
+      limparOutroProduto();
+      return;
+    }
+
+    const decisao = decidirProdutoPorNome(todosProdutos, nome);
+
+    if (decisao.acao === "reaproveitar") {
+      adicionarDoCatalogo(decisao.produto.id, decisao.produto.nome);
+      return;
+    }
+
+    if (decisao.acao === "recusar") {
+      setAvisoProduto(decisao.mensagem);
+      return;
+    }
+
+    setPerguntando(nome);
+  }
+
+  function confirmarProdutoNovo() {
+    if (!perguntando) return;
+
+    setLinhas((atuais) => [
+      ...atuais,
+      {
+        tipo: "produto",
+        refId: "",
+        nome: perguntando,
+        quantidade: 1,
+        // Sem preço: o valor desta venda é digitado aqui.
+        valor: "",
+        novo: true,
+      },
+    ]);
+    limparOutroProduto();
   }
 
   function mudarLinha(indice: number, mudanca: Partial<LinhaItem>) {
@@ -199,9 +320,17 @@ export default function FecharConta({
       {/* Listas paralelas em campo escondido: o formulário é controlado
           por estado, e nenhum campo visível leva `name`. */}
       {linhas.map((linha) => (
-        <div key={`${linha.tipo}:${linha.refId}`} hidden>
+        <div key={chaveDaLinha(linha)} hidden>
           <input type="hidden" name="item_tipo" value={linha.tipo} />
           <input type="hidden" name="item_ref" value={linha.refId} />
+          {/* `item_novo` é o "sim" da pergunta: sem ele a action não
+              cadastra produto. */}
+          <input type="hidden" name="item_nome" value={linha.nome} />
+          <input
+            type="hidden"
+            name="item_novo"
+            value={linha.novo ? "1" : "0"}
+          />
           <input
             type="hidden"
             name="item_quantidade"
@@ -292,18 +421,141 @@ export default function FecharConta({
                 nome={produto.nome}
                 marcado={escolhido("produto", produto.id)}
                 semPreco={produto.preco === null}
-                aoTocar={() =>
-                  alternar({
-                    tipo: "produto",
-                    refId: produto.id,
-                    nome: produto.nome,
-                    quantidade: 1,
-                    valor: paraCampo(produto.preco),
-                  })
-                }
+                aoTocar={() => alternar(linhaDoProduto(produto))}
               />
             ))}
           </GrupoDeChips>
+        )}
+
+        {/* O mesmo padrão do serviço novo na 4A: chip "· novo" com X,
+            campo de nome e a pergunta antes de cadastrar. */}
+        {produtosNovos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {produtosNovos.map((produto) => (
+              <span
+                key={chaveDaLinha(produto)}
+                className="flex min-h-11 items-center gap-1.5 rounded-full border border-rose-600 bg-rose-600 pr-2 pl-4 text-sm font-medium text-white"
+              >
+                {produto.nome}
+                <span className="text-xs font-normal text-rose-100">
+                  · novo
+                </span>
+                <button
+                  type="button"
+                  onClick={() => alternar(produto)}
+                  aria-label={`Tirar ${produto.nome}`}
+                  className="flex size-9 items-center justify-center rounded-full active:bg-rose-700"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <label htmlFor={idOutroProduto} className="sr-only">
+            Outro produto
+          </label>
+
+          <input
+            id={idOutroProduto}
+            type="text"
+            value={outroProduto}
+            onChange={(evento) => {
+              setOutroProduto(evento.target.value);
+              // Continuar digitando desfaz a pergunta e o aviso: eram
+              // sobre o nome de um instante atrás.
+              setPerguntando(null);
+              setAvisoProduto(null);
+            }}
+            onKeyDown={(evento) => {
+              // Enter aqui adiciona o produto, não fecha a conta pela
+              // metade.
+              if (evento.key === "Enter") {
+                evento.preventDefault();
+                adicionarOutroProduto();
+              }
+            }}
+            placeholder="Outro produto"
+            autoCapitalize="sentences"
+            autoComplete="off"
+            enterKeyHint="done"
+            className={classeCampo}
+          />
+
+          <button
+            type="button"
+            onClick={adicionarOutroProduto}
+            aria-label="Adicionar produto"
+            className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white text-neutral-700 active:bg-neutral-100"
+          >
+            <Plus aria-hidden="true" className="size-5" />
+          </button>
+        </div>
+
+        {avisoProduto && (
+          <p role="alert" className="text-sm text-rose-700">
+            {avisoProduto}
+          </p>
+        )}
+
+        {/* Catálogo nunca nasce em silêncio. E antes do "sim", o que já
+            existe com nome parecido — "Glaze Drops" é o "Gloss Absolu
+            Glaze drops" que já está lá. */}
+        {perguntando && (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div>
+              <p className="text-sm font-medium text-amber-900">
+                Cadastrar “{perguntando}” como produto novo?
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Entra no catálogo sem preço, marcado para você acertar
+                depois. O valor desta venda você digita aqui na conta.
+              </p>
+            </div>
+
+            {sugestoes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-amber-900">
+                  Ou é um destes?
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {sugestoes.map((produto) => (
+                    <button
+                      key={produto.id}
+                      type="button"
+                      onClick={() =>
+                        adicionarDoCatalogo(produto.id, produto.nome)
+                      }
+                      className="flex min-h-11 items-center rounded-full border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-700 active:bg-neutral-100"
+                    >
+                      {produto.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPerguntando(null)}
+                className="h-11 flex-1 rounded-xl border border-neutral-300 bg-white text-sm font-medium text-neutral-700 active:bg-neutral-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmarProdutoNovo}
+                className="h-11 flex-1 rounded-xl bg-amber-600 text-sm font-medium text-white active:bg-amber-700"
+              >
+                Cadastrar
+              </button>
+            </div>
+          </div>
         )}
       </section>
 
@@ -316,12 +568,17 @@ export default function FecharConta({
           <ul className="space-y-2">
             {linhas.map((linha, indice) => (
               <li
-                key={`${linha.tipo}:${linha.refId}`}
+                key={chaveDaLinha(linha)}
                 className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 flex-1 font-medium text-neutral-900">
                     {linha.nome}
+                    {linha.novo && (
+                      <span className="ml-1.5 text-xs font-normal text-amber-700">
+                        · novo
+                      </span>
+                    )}
                   </p>
 
                   <button

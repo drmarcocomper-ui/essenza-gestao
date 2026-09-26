@@ -214,6 +214,52 @@ describe("valor do item", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("aceita produto sem referência só quando é novo e confirmado", () => {
+    const novo = {
+      tipo: "produto",
+      refId: "",
+      nome: " Color Spectrum ",
+      novo: "1",
+      quantidade: "1",
+      valorUnitario: "180,00",
+    };
+
+    const saida = itemContaSchema.parse(novo);
+
+    expect(saida.novo).toBe(true);
+    expect(saida.nome).toBe("Color Spectrum");
+
+    // Sem o "sim" da pergunta, não cadastra.
+    expect(itemContaSchema.safeParse({ ...novo, novo: "0" }).success).toBe(
+      false,
+    );
+    // Serviço não nasce na conta: o caminho dele é a 4A.
+    expect(
+      itemContaSchema.safeParse({ ...novo, tipo: "servico" }).success,
+    ).toBe(false);
+    // Nome curto demais.
+    expect(itemContaSchema.safeParse({ ...novo, nome: "a" }).success).toBe(
+      false,
+    );
+  });
+
+  it("lê nome e confirmação do produto novo do formulário", () => {
+    const formData = new FormData();
+
+    formData.append("item_tipo", "produto");
+    formData.append("item_ref", "");
+    formData.append("item_nome", "Vitaamino");
+    formData.append("item_novo", "1");
+    formData.append("item_quantidade", "1");
+    formData.append("item_valor", "90,00");
+
+    expect(lerConta(formData).itens[0]).toMatchObject({
+      refId: "",
+      nome: "Vitaamino",
+      novo: "1",
+    });
+  });
 });
 
 describe("categoria do lançamento", () => {
@@ -473,6 +519,8 @@ describe("leitura do formulário", () => {
     expect(conta.itens[1]).toEqual({
       tipo: "produto",
       refId: PRODUTO,
+      nome: "",
+      novo: "",
       quantidade: "2",
       valorUnitario: "65,00",
     });

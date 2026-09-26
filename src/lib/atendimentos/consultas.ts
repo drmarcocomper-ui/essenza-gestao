@@ -1,3 +1,4 @@
+import type { ProdutoConferivel } from "@/lib/atendimentos/produtos";
 import { exigirSessao } from "@/lib/auth";
 import { compararPorParcela } from "@/lib/caixa/parcela";
 
@@ -179,6 +180,31 @@ export async function listarProdutosRevenda(): Promise<ProdutoCatalogo[]> {
     nome: linha.nome,
     preco: linha.preco_venda === null ? null : Number(linha.preco_venda),
   }));
+}
+
+/**
+ * A tabela `produtos` inteira — inativos e insumos incluídos —, só com o
+ * que a conferência de nome precisa (`decidirProdutoPorNome`).
+ *
+ * Produto se reativa, nunca se recadastra: antes de cadastrar o nome
+ * que ela digitou na conta, a busca tem que enxergar também o que está
+ * desativado ou cadastrado como material de uso.
+ */
+export async function listarProdutosParaConferencia(): Promise<
+  ProdutoConferivel[]
+> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("produtos")
+    .select("id, nome, tipo, ativo")
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error(`Não foi possível carregar os produtos: ${error.message}`);
+  }
+
+  return (data ?? []) as ProdutoConferivel[];
 }
 
 /**

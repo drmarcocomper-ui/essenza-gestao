@@ -10,6 +10,7 @@ import FecharConta, {
 import ChipParcela from "@/components/caixa/ChipParcela";
 import { emCentavos, totalLinha } from "@/lib/atendimentos/conta";
 import {
+  listarProdutosParaConferencia,
   listarProdutosRevenda,
   listarServicos,
   obterAtendimento,
@@ -47,9 +48,14 @@ export default async function AtendimentoPage({
 
   // O catálogo só é lido quando a conta ainda abre: fechada, os nomes e
   // os valores saem do que está gravado.
-  const [servicos, produtos] = atendimento.fechada
-    ? [[], []]
-    : await Promise.all([listarServicos(), listarProdutosRevenda()]);
+  const [servicos, produtos, todosProdutos] = atendimento.fechada
+    ? [[], [], []]
+    : await Promise.all([
+        listarServicos(),
+        listarProdutosRevenda(),
+        // Para a tela antecipar a conferência do produto digitado.
+        listarProdutosParaConferencia(),
+      ]);
 
   return (
     <div className="space-y-6">
@@ -103,6 +109,7 @@ export default async function AtendimentoPage({
           acao={fecharConta.bind(null, cliente.id, atendimento.id)}
           servicos={servicos}
           produtos={produtos}
+          todosProdutos={todosProdutos}
           itensIniciais={itensIniciais(atendimento, servicos, produtos)}
         />
       )}

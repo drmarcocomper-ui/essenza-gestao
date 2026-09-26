@@ -12,6 +12,7 @@ import {
   type CampoConta,
 } from "@/lib/atendimentos/conta";
 import {
+  listarProdutosParaConferencia,
   listarProdutosRevenda,
   listarServicos,
   obterAtendimento,
@@ -20,6 +21,11 @@ import {
   classificarFalhaConta,
   registrarFalhaConta,
 } from "@/lib/atendimentos/erros";
+import {
+  decidirProdutoPorNome,
+  novoProdutoDoAtendimento,
+  type ProdutoConferivel,
+} from "@/lib/atendimentos/produtos";
 import { exigirSessao } from "@/lib/auth";
 
 export type EstadoConta = {
@@ -38,6 +44,62 @@ type ItemResolvido = {
   /** Só para escolher a categoria do lançamento; não vai para o banco. */
   categoria: string | null;
 };
+
+type ClienteSupabase = Awaited<ReturnType<typeof exigirSessao>>["supabase"];
+
+type ProdutoResolvido =
+  | { ok: true; id: string; nome: string }
+  | { ok: false; mensagem: string };
+
+/**
+ * Converte o produto digitado na conta em `produto_id`.
+ *
+ * A decisão é a de `decidirProdutoPorNome`, refeita aqui com a tabela
+ * relida — a tela só a antecipou. O `refId` vazio só passa pelo schema
+ * com a confirmação que a tela pediu, então chegar aqui já é o "sim".
+ *
+ * O cadastro acontece ANTES do passo (a) do fechamento. Se algo depois
+ * falhar, o produto fica no catálogo e a conta segue aberta; na nova
+ * tentativa o mesmo nome casa com ele e é reaproveitado — nunca duplica.
+ *
+ * `todos` é mutado de propósito: o mesmo nome duas vezes na mesma conta
+ * casa com o recém-criado em vez de tentar criar outro.
+ */
+async function resolverProdutoNovo(
+  supabase: ClienteSupabase,
+  nome: string,
+  todos: ProdutoConferivel[],
+): Promise<ProdutoResolvido> {
+  const decisao = decidirProdutoPorNome(todos, nome);
+
+  if (decisao.acao === "recusar") {
+    return { ok: false, mensagem: decisao.mensagem };
+  }
+
+  if (decisao.acao === "reaproveitar") {
+    // Nome canônico do banco, não o que veio do formulário.
+    return { ok: true, id: decisao.produto.id, nome: decisao.produto.nome };
+  }
+
+  const { data, error } = await supabase
+    .from("produtos")
+    .insert(novoProdutoDoAtendimento(nome))
+    .select("id, nome, tipo, ativo")
+    .single();
+
+  if (error) {
+    return {
+      ok: false,
+      mensagem: `Não foi possível cadastrar "${nome}": ${error.message}`,
+    };
+  }
+
+  const criado = data as ProdutoConferivel;
+
+  todos.push(criado);
+
+  return { ok: true, id: criado.id, nome: criado.nome };
+}
 
 /**
  * Fecha a conta do atendimento: grava os itens e o dinheiro.
@@ -101,9 +163,13 @@ export async function fecharConta(
   // o `where` precisa de um recorte que pegue uma linha só por conta.
   // É migration, e fica para uma sessão de migration.
 
-  const [servicos, produtos] = await Promise.all([
+  const temProdutoNovo = conta.itens.some((item) => !item.refId);
+
+  const [servicos, produtos, todos] = await Promise.all([
     listarServicos({ incluirInativos: true }),
     listarProdutosRevenda(),
+    // A tabela inteira só quando há nome a conferir.
+    temProdutoNovo ? listarProdutosParaConferencia() : [],
   ]);
 
   const itens: ItemResolvido[] = [];
@@ -133,7 +199,21 @@ export async function fecharConta(
       continue;
     }
 
-    const produto = produtos.find((linha) => linha.id === item.refId);
+    let produto: { id: string; nome: string } | undefined;
+
+    if (item.refId) {
+      produto = produtos.find((linha) => linha.id === item.refId);
+    } else {
+      // Produto digitado na conta: o schema só deixa `refId` vazio
+      // passar com nome e confirmação.
+      const resolvido = await resolverProdutoNovo(supabase, item.nome, todos);
+
+      if (!resolvido.ok) {
+        return { erros: { itens: resolvido.mensagem } };
+      }
+
+      produto = resolvido;
+    }
 
     if (!produto) {
       return { erros: { itens: "Um dos produtos não está mais no catálogo." } };

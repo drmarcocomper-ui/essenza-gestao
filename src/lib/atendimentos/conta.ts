@@ -504,31 +504,60 @@ const valorObrigatorio = z.string().transform((bruto, ctx) => {
   return numero;
 });
 
-export const itemContaSchema = z.object({
-  tipo: z.enum(["servico", "produto"], { message: "Item inválido" }),
+export const itemContaSchema = z
+  .object({
+    tipo: z.enum(["servico", "produto"], { message: "Item inválido" }),
 
-  // `chk_item_referencia` (001) exige a referência do lado certo: item
-  // sem id de catálogo não existe.
-  refId: z
-    .string()
-    .trim()
-    .refine((v) => z.uuid().safeParse(v).success, {
-      message: "Item fora do catálogo",
+    // `chk_item_referencia` (001) exige a referência do lado certo: item
+    // sem id de catálogo não existe. A única exceção é o produto novo,
+    // conferida abaixo — a action cadastra antes de gravar o item.
+    refId: z.string().trim(),
+
+    /** Nome digitado. Só o produto novo usa; o resto vem do banco. */
+    nome: z.string().trim().default(""),
+
+    /**
+     * O "sim" que ela deu à pergunta "Cadastrar X como produto novo?".
+     * Sem ele a action não cadastra, mesmo com POST vindo de fora da UI.
+     */
+    novo: z
+      .string()
+      .default("")
+      .transform((v) => v.trim() === "1"),
+
+    quantidade: z.string().transform((bruto, ctx) => {
+      const numero = Number(bruto.trim());
+
+      if (!Number.isInteger(numero) || numero < 1 || numero > QUANTIDADE_MAXIMA) {
+        ctx.addIssue({ code: "custom", message: "Quantidade inválida" });
+        return z.NEVER;
+      }
+
+      return numero;
     }),
 
-  quantidade: z.string().transform((bruto, ctx) => {
-    const numero = Number(bruto.trim());
+    valorUnitario: valorObrigatorio,
+  })
+  .superRefine((item, ctx) => {
+    if (z.uuid().safeParse(item.refId).success) return;
 
-    if (!Number.isInteger(numero) || numero < 1 || numero > QUANTIDADE_MAXIMA) {
-      ctx.addIssue({ code: "custom", message: "Quantidade inválida" });
-      return z.NEVER;
+    if (item.tipo !== "produto" || !item.novo) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["refId"],
+        message: "Item fora do catálogo",
+      });
+      return;
     }
 
-    return numero;
-  }),
-
-  valorUnitario: valorObrigatorio,
-});
+    if (item.nome.length < 2 || item.nome.length > 120) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["nome"],
+        message: "Nome do produto novo precisa ter de 2 a 120 caracteres",
+      });
+    }
+  });
 
 export type ItemConta = z.infer<typeof itemContaSchema>;
 
@@ -697,6 +726,8 @@ export function errosDaConta(erro: z.ZodError) {
 export function lerConta(formData: FormData) {
   const tipos = formData.getAll("item_tipo").map(String);
   const refs = formData.getAll("item_ref").map(String);
+  const nomes = formData.getAll("item_nome").map(String);
+  const novos = formData.getAll("item_novo").map(String);
   const quantidades = formData.getAll("item_quantidade").map(String);
   const valores = formData.getAll("item_valor").map(String);
 
@@ -711,6 +742,8 @@ export function lerConta(formData: FormData) {
     itens: tipos.map((tipo, indice) => ({
       tipo,
       refId: refs[indice] ?? "",
+      nome: nomes[indice] ?? "",
+      novo: novos[indice] ?? "",
       quantidade: quantidades[indice] ?? "",
       valorUnitario: valores[indice] ?? "",
     })),
