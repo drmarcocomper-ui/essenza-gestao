@@ -28,6 +28,7 @@ function peca(codigo: string, extra: Partial<PecaExtensao> = {}): PecaExtensao {
 function codigosNaTela() {
   return screen
     .getAllByRole("link")
+    .filter((link) => link.getAttribute("href")?.startsWith("/produtos/"))
     .map((link) => link.querySelector("p")?.textContent);
 }
 
@@ -86,15 +87,15 @@ describe("ListaPecas", () => {
       />,
     );
 
-    expect(screen.getAllByText("desmembrada")).toHaveLength(1);
-    expect(screen.getByText("1254").closest("a")).toHaveTextContent("desmembrada");
+    expect(screen.getAllByText("Desmembrada")).toHaveLength(1);
+    expect(screen.getByText("1254").closest("a")).toHaveTextContent("Desmembrada");
 
     fireEvent.change(screen.getByLabelText("Buscar peça pelo código"), {
       target: { value: "1254" },
     });
 
     expect(codigosNaTela()).toEqual(["1254"]);
-    expect(screen.getByText("desmembrada")).toBeInTheDocument();
+    expect(screen.getByText("Desmembrada")).toBeInTheDocument();
   });
 
   it("leva à edição da peça", () => {
@@ -121,5 +122,48 @@ describe("ListaPecas", () => {
 
     expect(screen.queryByLabelText("Buscar peça pelo código")).toBeNull();
     expect(screen.getByText("Nenhuma peça cadastrada ainda.")).toBeInTheDocument();
+  });
+
+  describe("selo de estado", () => {
+    const CONTA = {
+      atendimentoId: "at-1",
+      clienteId: "cl-1",
+      clienteNome: "Maria Souza",
+      data: "2026-09-12",
+      fechada: false,
+    };
+
+    it("disponível e desmembrada, sem link", () => {
+      render(
+        <ListaPecas pecas={[peca("1254"), peca("1254-a", { pecaMaeId: "1254" })]} />,
+      );
+
+      expect(screen.getByText("1254").closest("a")).toHaveTextContent("Desmembrada");
+      expect(screen.getByText("1254-a").closest("a")).toHaveTextContent("Disponível");
+    });
+
+    it("na conta aberta: cliente, e link para o atendimento", () => {
+      render(<ListaPecas pecas={[peca("1254")]} contas={{ "1254": CONTA }} />);
+
+      const selo = screen.getByRole("link", { name: /Na conta aberta · Maria Souza/ });
+
+      expect(selo).toHaveAttribute("href", "/clientes/cl-1/atendimentos/at-1");
+      // Fora do link da peça: link dentro de link não existe.
+      expect(selo.closest("a")).toBe(selo);
+      expect(screen.getByText("1254").closest("a")).not.toHaveTextContent("Disponível");
+    });
+
+    it("vendida: cliente e dd/mm, com link para o atendimento", () => {
+      render(
+        <ListaPecas
+          pecas={[peca("1254")]}
+          contas={{ "1254": { ...CONTA, fechada: true } }}
+        />,
+      );
+
+      expect(
+        screen.getByRole("link", { name: /Vendida · Maria Souza · 12\/09/ }),
+      ).toHaveAttribute("href", "/clientes/cl-1/atendimentos/at-1");
+    });
   });
 });

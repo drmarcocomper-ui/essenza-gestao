@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search, X } from "lucide-react";
 
+import SeloEstadoPeca from "@/components/produtos/SeloEstadoPeca";
 import { formatarMoeda } from "@/lib/formatters";
 import type { PecaExtensao } from "@/lib/pecas-extensao/consultas";
 import {
   idsDesmembradas,
   ordenarPecas,
   pecaCasaComTermo,
+  type ContaDaPeca,
 } from "@/lib/pecas-extensao/regras";
 
 /** Campo não informado: nunca 0, que seria outro dado. */
@@ -33,7 +35,14 @@ function preco(valor: number | null) {
  * abaixo da mãe. A tabela vem inteira do servidor, e a busca por código
  * filtra aqui, a cada tecla, como a da revenda.
  */
-export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
+export default function ListaPecas({
+  pecas,
+  contas = {},
+}: {
+  pecas: PecaExtensao[];
+  /** A conta de cada peça que entrou em alguma, por id (`listarContasDasPecas`). */
+  contas?: Record<string, ContaDaPeca>;
+}) {
   const [termo, setTermo] = useState("");
 
   const encontradas = ordenarPecas(
@@ -83,7 +92,11 @@ export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
               key={peca.id}
               style={nivel > 0 ? { marginLeft: `${nivel * RECUO_POR_NIVEL}rem` } : undefined}
             >
-              <CardPeca peca={peca} desmembrada={desmembradas.has(peca.id)} />
+              <CardPeca
+                peca={peca}
+                desmembrada={desmembradas.has(peca.id)}
+                conta={contas[peca.id] ?? null}
+              />
             </li>
           ))}
         </ul>
@@ -99,68 +112,77 @@ export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
 }
 
 /**
- * Código em destaque, depois cor · textura e gramas · comprimento; os
- * dois preços à direita, com rótulo, porque sem ele não se sabe qual é
- * qual.
+ * Código em destaque com o selo de estado, depois cor · textura e
+ * gramas · comprimento; os dois preços à direita, com rótulo, porque sem
+ * ele não se sabe qual é qual.
+ *
+ * Peça numa conta ganha uma segunda linha, FORA do link da peça — link
+ * dentro de link não existe —, que é o selo e leva ao atendimento.
  */
 function CardPeca({
   peca,
   desmembrada,
+  conta,
 }: {
   peca: PecaExtensao;
   desmembrada: boolean;
+  conta: ContaDaPeca | null;
 }) {
   return (
-    <Link
-      href={`/produtos/extensao/${peca.id}`}
-      className="flex min-h-16 items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 active:bg-neutral-100"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate font-medium text-neutral-900">{peca.codigo}</p>
+    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+      <Link
+        href={`/produtos/extensao/${peca.id}`}
+        className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-neutral-100"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate font-medium text-neutral-900">{peca.codigo}</p>
 
-          {desmembrada && (
-            <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
-              desmembrada
-            </span>
-          )}
+            {!conta && <SeloEstadoPeca temFilhas={desmembrada} conta={null} />}
+          </div>
+
+          <p className="mt-0.5 truncate text-sm text-neutral-500">
+            {peca.cor ?? VAZIO} · {peca.textura ?? VAZIO}
+          </p>
+
+          <p className="truncate text-sm tabular-nums text-neutral-500">
+            {medida(peca.gramas, "g")} · {medida(peca.comprimentoCm, "cm")}
+          </p>
         </div>
 
-        <p className="mt-0.5 truncate text-sm text-neutral-500">
-          {peca.cor ?? VAZIO} · {peca.textura ?? VAZIO}
-        </p>
+        <dl className="shrink-0 text-right text-sm tabular-nums">
+          <div>
+            <dt className="sr-only">Preço de venda</dt>
+            <dd className="font-medium text-neutral-900">
+              <span aria-hidden="true" className="text-xs font-normal text-neutral-400">
+                venda{" "}
+              </span>
+              {preco(peca.precoVenda)}
+            </dd>
+          </div>
 
-        <p className="truncate text-sm tabular-nums text-neutral-500">
-          {medida(peca.gramas, "g")} · {medida(peca.comprimentoCm, "cm")}
-        </p>
-      </div>
+          <div>
+            <dt className="sr-only">Preço de compra</dt>
+            <dd className="text-neutral-500">
+              <span aria-hidden="true" className="text-xs text-neutral-400">
+                compra{" "}
+              </span>
+              {preco(peca.precoCompra)}
+            </dd>
+          </div>
+        </dl>
 
-      <dl className="shrink-0 text-right text-sm tabular-nums">
-        <div>
-          <dt className="sr-only">Preço de venda</dt>
-          <dd className="font-medium text-neutral-900">
-            <span aria-hidden="true" className="text-xs font-normal text-neutral-400">
-              venda{" "}
-            </span>
-            {preco(peca.precoVenda)}
-          </dd>
+        <ChevronRight
+          aria-hidden="true"
+          className="size-5 shrink-0 text-neutral-300"
+        />
+      </Link>
+
+      {conta && (
+        <div className="border-t border-neutral-100">
+          <SeloEstadoPeca temFilhas={desmembrada} conta={conta} />
         </div>
-
-        <div>
-          <dt className="sr-only">Preço de compra</dt>
-          <dd className="text-neutral-500">
-            <span aria-hidden="true" className="text-xs text-neutral-400">
-              compra{" "}
-            </span>
-            {preco(peca.precoCompra)}
-          </dd>
-        </div>
-      </dl>
-
-      <ChevronRight
-        aria-hidden="true"
-        className="size-5 shrink-0 text-neutral-300"
-      />
-    </Link>
+      )}
+    </div>
   );
 }

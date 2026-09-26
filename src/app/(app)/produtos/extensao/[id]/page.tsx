@@ -7,11 +7,12 @@ import { atualizarPeca } from "@/app/(app)/produtos/extensao/actions";
 import BotaoDesfazerDesmembramento from "@/components/produtos/BotaoDesfazerDesmembramento";
 import BotaoExcluirPeca from "@/components/produtos/BotaoExcluirPeca";
 import FormularioPeca from "@/components/produtos/FormularioPeca";
+import SeloEstadoPeca from "@/components/produtos/SeloEstadoPeca";
 import {
   listarContasDasPecas,
   listarPartes,
-  obterContaDaPeca,
   listarSugestoes,
+  obterContaDaPeca,
   obterPeca,
 } from "@/lib/pecas-extensao/consultas";
 import {
@@ -58,6 +59,17 @@ export default async function EditarPecaPage({
         <h2 className="text-lg font-semibold text-neutral-900">
           Peça {peca.codigo}
         </h2>
+
+        {/* O mesmo selo da lista. Numa conta, é o caminho até ela. */}
+        {conta ? (
+          <div className="mt-2 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            <SeloEstadoPeca temFilhas={temFilhas} conta={conta} />
+          </div>
+        ) : (
+          <div className="mt-1">
+            <SeloEstadoPeca temFilhas={temFilhas} conta={null} />
+          </div>
+        )}
 
         {/* Parte: o caminho até o Desfazer, que mora na mãe. */}
         {mae && (

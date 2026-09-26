@@ -4,7 +4,10 @@ import { Plus } from "lucide-react";
 
 import ListaPecas from "@/components/produtos/ListaPecas";
 import ListaProdutos from "@/components/produtos/ListaProdutos";
-import { listarPecas } from "@/lib/pecas-extensao/consultas";
+import {
+  listarContasDasPecas,
+  listarPecas,
+} from "@/lib/pecas-extensao/consultas";
 import { listarProdutos } from "@/lib/produtos/consultas";
 
 export const metadata: Metadata = {
@@ -18,9 +21,10 @@ export const metadata: Metadata = {
  * revenda.
  */
 export default async function ProdutosPage() {
-  const [produtos, pecas] = await Promise.all([
+  const [produtos, pecas, contas] = await Promise.all([
     listarProdutos(),
     listarPecas(),
+    listarContasDasPecas(),
   ]);
 
   return (
@@ -55,7 +59,7 @@ export default async function ProdutosPage() {
           </Link>
         </div>
 
-        <ListaPecas pecas={pecas} />
+        <ListaPecas pecas={pecas} contas={contas} />
       </section>
 
       {/* Acima da BottomNav (h-14) e no canto do polegar. */}

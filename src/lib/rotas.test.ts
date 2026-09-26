@@ -215,3 +215,15 @@ describe("links da peça de extensão na conta", () => {
     expect(rotaExiste("/produtos/extensao/:dyn")).toBe(true);
   });
 });
+
+describe("link do selo da peça para a conta", () => {
+  it("o selo linka o atendimento, e o link resolve", () => {
+    const selo = readFileSync(
+      path.join(RAIZ, "src/components/produtos/SeloEstadoPeca.tsx"),
+      "utf8",
+    );
+
+    expect(linksDoArquivo(selo)).toContain("/clientes/:dyn/atendimentos/:dyn");
+    expect(rotaExiste("/clientes/:dyn/atendimentos/:dyn")).toBe(true);
+  });
+});
