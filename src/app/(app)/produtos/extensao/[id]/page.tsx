@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Scissors } from "lucide-react";
 
 import { atualizarPeca } from "@/app/(app)/produtos/extensao/actions";
 import BotaoExcluirPeca from "@/components/produtos/BotaoExcluirPeca";
@@ -50,6 +52,24 @@ export default async function EditarPecaPage({
         origens={origens}
         rotuloEnviar="Salvar"
       />
+
+      {!temFilhas && (
+        <div className="border-t border-neutral-200 pt-4">
+          {travas.motivoNaoDesmembra ? (
+            <p className="text-sm text-neutral-500">
+              {travas.motivoNaoDesmembra}
+            </p>
+          ) : (
+            <Link
+              href={`/produtos/extensao/${peca.id}/desmembrar`}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
+            >
+              <Scissors aria-hidden="true" className="size-5" />
+              Desmembrar
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="border-t border-neutral-200 pt-4">
         {travas.motivoExclusaoTravada ? (

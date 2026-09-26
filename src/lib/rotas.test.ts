@@ -130,6 +130,29 @@ describe("links internos", () => {
   });
 });
 
+describe("rotas da seção Extensão", () => {
+  /**
+   * `/produtos/extensao/...` só funciona porque o segmento estático
+   * `extensao` ganha do `[id]` da revenda; e o desmembrar é linkado com
+   * template literal, que o build não confere.
+   */
+  it.each([
+    "src/app/(app)/produtos/extensao/nova/page.tsx",
+    "src/app/(app)/produtos/extensao/[id]/page.tsx",
+    "src/app/(app)/produtos/extensao/[id]/desmembrar/page.tsx",
+  ])("%s existe", (arquivo) => {
+    expect(existsSync(path.join(RAIZ, arquivo))).toBe(true);
+  });
+
+  it.each([
+    "/produtos/extensao/nova",
+    "/produtos/extensao/:dyn",
+    "/produtos/extensao/:dyn/desmembrar",
+  ])("%s é uma rota navegável", (caminho) => {
+    expect(rotaExiste(caminho)).toBe(true);
+  });
+});
+
 describe("rotas do módulo de fórmula e atendimento", () => {
   /**
    * Os arquivos que o fluxo principal depende, fixados pelo caminho.

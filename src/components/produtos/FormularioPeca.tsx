@@ -337,8 +337,11 @@ type PropsControle = {
   "aria-describedby"?: string;
 };
 
-/** Rótulo + controle + ajuda + erro, com os ids já amarrados. */
-function Campo({
+/**
+ * Rótulo + controle + ajuda + erro, com os ids já amarrados. Também usado
+ * pela tela de desmembrar, para as partes terem a cara do cadastro.
+ */
+export function Campo({
   rotulo,
   erro,
   ajuda,
