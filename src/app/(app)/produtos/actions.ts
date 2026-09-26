@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { exigirSessao } from "@/lib/auth";
+import { listarParaConferencia, obterProduto } from "@/lib/produtos/consultas";
 import {
-  listarAtivosParaConferencia,
-  obterProduto,
-} from "@/lib/produtos/consultas";
-import {
+  conferirCadastro,
   encontrarDuplicado,
   mensagemDuplicado,
   MENSAGEM_DUPLICADO_BANCO,
@@ -24,6 +22,8 @@ import {
 export type EstadoFormulario = {
   erros?: Partial<Record<CampoProduto, string>>;
   mensagem?: string;
+  /** Nome de um inativo: o formulário mostra o link para reativá-lo. */
+  reativarId?: string;
   /** O que a usuária já tinha digitado, para o formulário não se apagar. */
   valores?: Partial<Record<CampoProduto, string>>;
 };
@@ -47,15 +47,9 @@ export async function criarProduto(
   }
 
   const { nome, marca } = validacao.data;
-  const existente = encontrarDuplicado(
-    await listarAtivosParaConferencia(),
-    nome,
-    marca,
-  );
+  const recusa = conferirCadastro(await listarParaConferencia(), nome, marca);
 
-  if (existente) {
-    return { mensagem: mensagemDuplicado(existente), valores: bruto };
-  }
+  if (recusa) return { ...recusa, valores: bruto };
 
   const { error } = await supabase
     .from("produtos")
@@ -99,20 +93,19 @@ export async function atualizarProduto(
     return { mensagem: "Produto não encontrado.", valores: bruto };
   }
 
-  // Inativo não ocupa nome no índice da 011: a conferência fica para a
-  // reativação.
+  // Renomear um ativo passa pela mesma conferência do cadastro, inativos
+  // incluídos. Editar um inativo não confere: ele não ocupa nome no
+  // índice da 011, e a conferência fica para a reativação.
   if (produto.ativo) {
     const { nome, marca } = validacao.data;
-    const existente = encontrarDuplicado(
-      await listarAtivosParaConferencia(),
+    const recusa = conferirCadastro(
+      await listarParaConferencia(),
       nome,
       marca,
       id,
     );
 
-    if (existente) {
-      return { mensagem: mensagemDuplicado(existente), valores: bruto };
-    }
+    if (recusa) return { ...recusa, valores: bruto };
   }
 
   const { error } = await supabase
@@ -152,8 +145,10 @@ export async function alternarAtivoProduto(
 
     if (!produto) return { erro: "Produto não encontrado." };
 
+    // Só os ativos: outro inativo de mesmo nome não impede nada.
+    const ativos = (await listarParaConferencia()).filter((p) => p.ativo);
     const existente = encontrarDuplicado(
-      await listarAtivosParaConferencia(),
+      ativos,
       produto.nome,
       produto.marca,
       id,

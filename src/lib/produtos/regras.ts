@@ -10,6 +10,7 @@ export type ProdutoIdentificavel = {
   nome: string;
   marca: string | null;
   tipo: string;
+  ativo: boolean;
 };
 
 /** Nome + marca como o app compara: sem acento, caixa ou espaço sobrando. */
@@ -18,9 +19,9 @@ export function chaveProduto(nome: string, marca: string | null) {
 }
 
 /**
- * O produto ativo que já ocupa este nome + marca, se houver.
+ * O produto da lista que já ocupa este nome + marca, se houver.
  *
- * `ativos` precisa vir de TODOS os tipos: o índice da 011 não olha o
+ * A lista precisa vir de TODOS os tipos: o índice da 011 não olha o
  * tipo, então um insumo com o mesmo nome e marca também bloqueia o
  * insert. `ignorarId` é o próprio produto, na edição e na reativação.
  *
@@ -29,7 +30,7 @@ export function chaveProduto(nome: string, marca: string | null) {
  * produto.
  */
 export function encontrarDuplicado<T extends ProdutoIdentificavel>(
-  ativos: readonly T[],
+  produtos: readonly T[],
   nome: string,
   marca: string | null,
   ignorarId?: string,
@@ -37,7 +38,7 @@ export function encontrarDuplicado<T extends ProdutoIdentificavel>(
   const alvo = chaveProduto(nome, marca);
 
   return (
-    ativos.find(
+    produtos.find(
       (produto) =>
         produto.id !== ignorarId &&
         chaveProduto(produto.nome, produto.marca) === alvo,
@@ -52,6 +53,55 @@ export function mensagemDuplicado(existente: ProdutoIdentificavel) {
     existente.tipo === "revenda" ? "" : ", cadastrado como material de uso";
 
   return `Já existe o produto "${existente.nome}"${marca}${comoInsumo}. Use outro nome ou outra marca.`;
+}
+
+export type RecusaCadastro = {
+  mensagem: string;
+  /** O inativo que ela deve reativar, quando dá para abrir na tela. */
+  reativarId?: string;
+};
+
+/**
+ * Conferência do cadastro e da edição (renomear).
+ *
+ * Produto se REATIVA, nunca se recadastra (mesma regra do "Outro
+ * produto" da conta, desde a 019): um segundo id com o mesmo nome parte
+ * o histórico de venda em dois. Por isso `todos` inclui os inativos, que
+ * o índice da 011 deixaria passar.
+ *
+ * Ativo ganha do inativo: se os dois colidem, o recado útil é o do
+ * ativo. Inativo de revenda vem com o id para o link de reativar; insumo
+ * não, porque a tela de Produtos não o edita.
+ */
+export function conferirCadastro<T extends ProdutoIdentificavel>(
+  todos: readonly T[],
+  nome: string,
+  marca: string | null,
+  ignorarId?: string,
+): RecusaCadastro | null {
+  const ativo = encontrarDuplicado(
+    todos.filter((produto) => produto.ativo),
+    nome,
+    marca,
+    ignorarId,
+  );
+
+  if (ativo) return { mensagem: mensagemDuplicado(ativo) };
+
+  const inativo = encontrarDuplicado(todos, nome, marca, ignorarId);
+
+  if (!inativo) return null;
+
+  if (inativo.tipo !== "revenda") {
+    return {
+      mensagem: `Já existe "${inativo.nome}" desativado, cadastrado como material de uso. Use outro nome ou outra marca.`,
+    };
+  }
+
+  return {
+    mensagem: `Já existe "${inativo.nome}" desativado. Reative em vez de cadastrar de novo.`,
+    reativarId: inativo.id,
+  };
 }
 
 /** Rede de baixo: o índice da 011 barrou o que a conferência não viu. */

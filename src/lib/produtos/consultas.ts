@@ -85,18 +85,19 @@ export async function obterProduto(
 }
 
 /**
- * Os ativos de todos os tipos, para `encontrarDuplicado`: é o mesmo
- * universo que o índice da 011 vigia.
+ * A tabela inteira — todos os tipos, ativos e inativos — para
+ * `conferirCadastro` e `encontrarDuplicado`. O cadastro olha os
+ * inativos (reativar, não recadastrar); a reativação filtra os ativos,
+ * que é o universo do índice da 011.
  */
-export async function listarAtivosParaConferencia(): Promise<
+export async function listarParaConferencia(): Promise<
   ProdutoIdentificavel[]
 > {
   const { supabase } = await exigirSessao();
 
   const { data, error } = await supabase
     .from("produtos")
-    .select("id, nome, marca, tipo")
-    .eq("ativo", true);
+    .select("id, nome, marca, tipo, ativo");
 
   if (error) {
     throw new Error(`Não foi possível conferir os produtos: ${error.message}`);

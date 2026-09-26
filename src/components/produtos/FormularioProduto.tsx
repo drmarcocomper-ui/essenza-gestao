@@ -38,12 +38,21 @@ export default function FormularioProduto({
   return (
     <form action={enviar} className="space-y-5">
       {estado.mensagem && (
-        <p
+        <div
           role="alert"
           className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
         >
-          {estado.mensagem}
-        </p>
+          <p>{estado.mensagem}</p>
+
+          {estado.reativarId && (
+            <Link
+              href={`/produtos/${estado.reativarId}/editar`}
+              className="mt-1 flex min-h-11 items-center font-medium text-rose-700 underline underline-offset-2"
+            >
+              Abrir o produto desativado
+            </Link>
+          )}
+        </div>
       )}
 
       <Campo rotulo="Nome" erro={estado.erros?.nome} obrigatorio>
