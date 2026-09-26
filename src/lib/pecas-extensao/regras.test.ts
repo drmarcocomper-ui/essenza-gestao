@@ -7,6 +7,7 @@ import {
   mensagemPecaEmOutraConta,
   MENSAGEM_CODIGO_TRAVADO,
   pecaVendavelNaConta,
+  resumoDaPeca,
   type ContaDaPeca,
   codigoDoDuplicado,
   compararCodigos,
@@ -454,5 +455,19 @@ describe("mensagens de peça na conta", () => {
   it("em outra conta, com e sem código", () => {
     expect(mensagemPecaEmOutraConta("1254")).toBe("A peça 1254 já está em outra conta.");
     expect(mensagemPecaEmOutraConta(null)).toBe("A peça já está em outra conta.");
+  });
+});
+
+describe("resumoDaPeca", () => {
+  it("cor · gramas · comprimento", () => {
+    expect(resumoDaPeca({ cor: "Castanho", gramas: 100, comprimentoCm: 55.5 })).toBe(
+      "Castanho · 100 g · 55,5 cm",
+    );
+  });
+
+  it("o que não foi informado é —, nunca 0", () => {
+    expect(resumoDaPeca({ cor: null, gramas: null, comprimentoCm: null })).toBe(
+      "— · — g · — cm",
+    );
   });
 });

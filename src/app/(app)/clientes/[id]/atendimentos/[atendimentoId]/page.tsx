@@ -23,6 +23,8 @@ import {
 import { resumoReabertura } from "@/lib/atendimentos/reabertura";
 import { obterCliente } from "@/lib/clientes/consultas";
 import { formatarData, formatarDiaMes, formatarMoeda } from "@/lib/formatters";
+import { listarPecasVendaveis } from "@/lib/pecas-extensao/consultas";
+import { resumoDaPeca } from "@/lib/pecas-extensao/regras";
 
 export async function generateMetadata({
   params,
@@ -53,13 +55,15 @@ export default async function AtendimentoPage({
 
   // O catálogo só é lido quando a conta ainda abre: fechada, os nomes e
   // os valores saem do que está gravado.
-  const [servicos, produtos, todosProdutos] = atendimento.fechada
-    ? [[], [], []]
+  const [servicos, produtos, todosProdutos, pecas] = atendimento.fechada
+    ? [[], [], [], []]
     : await Promise.all([
         listarServicos(),
         listarProdutosRevenda(),
         // Para a tela antecipar a conferência do produto digitado.
         listarProdutosParaConferencia(),
+        // Peças que podem entrar nesta conta, com a desta conta inclusive.
+        listarPecasVendaveis(atendimento.id),
       ]);
 
   return (
@@ -120,6 +124,7 @@ export default async function AtendimentoPage({
           produtos={produtos}
           todosProdutos={todosProdutos}
           itensIniciais={itensIniciais(atendimento, servicos, produtos)}
+          pecas={pecas}
         />
       )}
     </div>
@@ -158,6 +163,7 @@ function itensIniciais(
         nome: item.descricao,
         quantidade: 1,
         valor: paraCampo(item.valorUnitario),
+        detalhe: item.peca ? resumoDaPeca(item.peca) : undefined,
       };
     }
 
@@ -220,15 +226,29 @@ function ContaFechada({
 
       <ul className="divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
         {atendimento.itens.map((item) => (
-          <li key={item.id} className="flex gap-3 px-4 py-3">
-            <span className="min-w-0 flex-1 text-neutral-900">
-              {item.quantidade > 1 && (
-                <span className="text-neutral-500 tabular-nums">
-                  {item.quantidade}×{" "}
+          <li key={item.id} className="flex items-center gap-3 px-4 py-3">
+            {item.peca ? (
+              // A peça vendida leva à ficha dela: é lá que se vê de onde
+              // veio, quanto custou e em que conta entrou.
+              <Link
+                href={`/produtos/extensao/${item.peca.id}`}
+                className="-my-1 flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded-lg active:bg-neutral-100"
+              >
+                <span className="text-rose-700">{item.descricao}</span>
+                <span className="text-xs text-neutral-500 tabular-nums">
+                  {resumoDaPeca(item.peca)}
                 </span>
-              )}
-              {item.descricao}
-            </span>
+              </Link>
+            ) : (
+              <span className="min-w-0 flex-1 text-neutral-900">
+                {item.quantidade > 1 && (
+                  <span className="text-neutral-500 tabular-nums">
+                    {item.quantidade}×{" "}
+                  </span>
+                )}
+                {item.descricao}
+              </span>
+            )}
 
             <span className="shrink-0 text-neutral-900 tabular-nums">
               {formatarMoeda(item.valorUnitario * item.quantidade)}

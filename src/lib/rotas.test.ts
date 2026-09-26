@@ -196,3 +196,22 @@ describe("link do Caixa para a conta do atendimento", () => {
     expect(rotaExiste("/clientes/:dyn/atendimentos/:dyn")).toBe(true);
   });
 });
+
+describe("links da peça de extensão na conta", () => {
+  /**
+   * A conta fechada leva à ficha da peça vendida. O href é template
+   * literal: o build não confere, este teste sim.
+   */
+  it("a página do atendimento linka a peça, e o link resolve", () => {
+    const pagina = readFileSync(
+      path.join(
+        RAIZ,
+        "src/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/page.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(linksDoArquivo(pagina)).toContain("/produtos/extensao/:dyn");
+    expect(rotaExiste("/produtos/extensao/:dyn")).toBe(true);
+  });
+});

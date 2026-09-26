@@ -25,9 +25,9 @@ import {
   totalItens,
   totalFormas,
   type Instituicao,
-  type TipoItem,
   type ModalidadeCartao,
   type TitularidadeConta,
+  type TipoItem,
 } from "@/lib/atendimentos/conta";
 import type {
   ProdutoCatalogo,
@@ -42,6 +42,12 @@ import { jaEscolhido as nomeJaEscolhido } from "@/lib/atendimentos/servicos";
 import { normalizar } from "@/lib/busca";
 import { hoje } from "@/lib/caixa/mes";
 import { mascararMoeda, moedaParaNumero } from "@/lib/formatters";
+import type { PecaVendavel } from "@/lib/pecas-extensao/consultas";
+import {
+  codigoContemTermo,
+  descricaoDaPecaNaConta,
+  resumoDaPeca,
+} from "@/lib/pecas-extensao/regras";
 import { agruparPorCategoria } from "@/lib/servicos/grupos";
 
 export type LinhaItem = {
@@ -57,6 +63,11 @@ export type LinhaItem = {
    * antes de gravar o item.
    */
   novo?: boolean;
+  /**
+   * Peça de extensão: "Castanho · 100 g · 55 cm", para ela conferir a
+   * peça na conta. Só a tela usa; não viaja no formulário.
+   */
+  detalhe?: string;
 };
 
 /**
@@ -81,6 +92,24 @@ function linhaDoProduto(produto: ProdutoCatalogo): LinhaItem {
   };
 }
 
+/**
+ * Peça de extensão como linha da conta: uma unidade, sempre, e o preço de
+ * venda como sugestão — vazio quando a peça não tem, e ela digita.
+ */
+function linhaDaPeca(peca: PecaVendavel): LinhaItem {
+  return {
+    tipo: "peca_extensao",
+    refId: peca.id,
+    nome: descricaoDaPecaNaConta(peca.codigo),
+    quantidade: 1,
+    valor: paraCampo(peca.precoVenda),
+    detalhe: resumoDaPeca(peca),
+  };
+}
+
+/** Quantas peças a busca mostra de uma vez; o resto aparece digitando. */
+const MAXIMO_PECAS_NA_LISTA = 20;
+
 type LinhaForma = {
   chave: number;
   instituicao: Instituicao | "";
@@ -99,6 +128,11 @@ type Props = {
   /** A tabela `produtos` inteira, para conferir o nome digitado. */
   todosProdutos: ProdutoConferivel[];
   itensIniciais: LinhaItem[];
+  /**
+   * Peças que podem entrar nesta conta (`listarPecasVendaveis`): inteiras
+   * e livres, ou já nesta conta. Vazio esconde o bloco Extensão.
+   */
+  pecas: PecaVendavel[];
 };
 
 const ESTADO_INICIAL: EstadoConta = {};
@@ -128,6 +162,7 @@ export default function FecharConta({
   produtos,
   todosProdutos,
   itensIniciais,
+  pecas,
 }: Props) {
   const [estado, enviar, enviando] = useActionState(acao, ESTADO_INICIAL);
 
@@ -140,12 +175,15 @@ export default function FecharConta({
   const [perguntando, setPerguntando] = useState<string | null>(null);
   /** Por que o nome digitado não pode entrar (desativado, ambíguo...). */
   const [avisoProduto, setAvisoProduto] = useState<string | null>(null);
+  /** O que ela digitou na busca de peça de extensão. */
+  const [termoPeca, setTermoPeca] = useState("");
 
   // Duas formas podem ser da mesma instituição, então a chave não pode
   // sair do conteúdo da linha.
   const proximaChave = useRef(0);
   const idData = useId();
   const idOutroProduto = useId();
+  const idBuscaPeca = useId();
 
   const itensValorados = linhas.map((linha) => ({
     quantidade: linha.quantidade,
@@ -185,6 +223,11 @@ export default function FecharConta({
   }
 
   const produtosNovos = linhas.filter((linha) => linha.novo);
+
+  const pecasEncontradas = pecas.filter((peca) =>
+    codigoContemTermo(peca.codigo, termoPeca),
+  );
+  const pecasNaLista = pecasEncontradas.slice(0, MAXIMO_PECAS_NA_LISTA);
 
   /** Sugestões para a pergunta, sem o que já está na conta. */
   const sugestoes = perguntando
@@ -558,6 +601,84 @@ export default function FecharConta({
             </div>
           </div>
         )}
+
+        {/* Peça de extensão: a peça única do estoque (018), não o produto
+            de catálogo "Extensão capilar", que continua nos Produtos. Só
+            aparece quando há peça que pode entrar nesta conta. */}
+        {pecas.length > 0 && (
+          <GrupoDeChips
+            rotulo="Extensão"
+            escolhidos={
+              linhas.filter((linha) => linha.tipo === "peca_extensao").length
+            }
+          >
+            <div className="w-full">
+              <label htmlFor={idBuscaPeca} className="sr-only">
+                Buscar peça pelo código
+              </label>
+
+              <input
+                id={idBuscaPeca}
+                type="search"
+                value={termoPeca}
+                onChange={(evento) => setTermoPeca(evento.target.value)}
+                onKeyDown={(evento) => {
+                  // Enter aqui não fecha a conta pela metade.
+                  if (evento.key === "Enter") evento.preventDefault();
+                }}
+                placeholder="Código da peça"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                enterKeyHint="search"
+                className={classeCampo}
+              />
+            </div>
+
+            {pecasNaLista.length === 0 ? (
+              <p className="w-full px-1 text-sm text-neutral-500">
+                Nenhuma peça com esse código.
+              </p>
+            ) : (
+              <ul className="w-full space-y-2">
+                {pecasNaLista.map((peca) => {
+                  const marcada = escolhido("peca_extensao", peca.id);
+
+                  return (
+                    <li key={peca.id}>
+                      <button
+                        type="button"
+                        onClick={() => alternar(linhaDaPeca(peca))}
+                        aria-pressed={marcada}
+                        className={`flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm ${
+                          marcada
+                            ? "border-rose-600 bg-rose-600 text-white"
+                            : "border-neutral-300 bg-white text-neutral-700 active:bg-neutral-100"
+                        }`}
+                      >
+                        <span className="font-medium">{peca.codigo}</span>
+                        <span
+                          className={`min-w-0 truncate ${
+                            marcada ? "text-rose-100" : "text-neutral-500"
+                          }`}
+                        >
+                          · {resumoDaPeca(peca)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {pecasEncontradas.length > pecasNaLista.length && (
+              <p className="w-full px-1 text-xs text-neutral-500">
+                Mais {pecasEncontradas.length - pecasNaLista.length} — digite o
+                código para achar.
+              </p>
+            )}
+          </GrupoDeChips>
+        )}
       </section>
 
       {linhas.length > 0 && (
@@ -573,14 +694,22 @@ export default function FecharConta({
                 className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-3"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 font-medium text-neutral-900">
-                    {linha.nome}
-                    {linha.novo && (
-                      <span className="ml-1.5 text-xs font-normal text-amber-700">
-                        · novo
-                      </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-neutral-900">
+                      {linha.nome}
+                      {linha.novo && (
+                        <span className="ml-1.5 text-xs font-normal text-amber-700">
+                          · novo
+                        </span>
+                      )}
+                    </p>
+
+                    {linha.detalhe && (
+                      <p className="text-xs text-neutral-500 tabular-nums">
+                        {linha.detalhe}
+                      </p>
                     )}
-                  </p>
+                  </div>
 
                   <button
                     type="button"
@@ -593,13 +722,16 @@ export default function FecharConta({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Quantidade
-                    nome={linha.nome}
-                    valor={linha.quantidade}
-                    aoTrocar={(quantidade) =>
-                      mudarLinha(indice, { quantidade })
-                    }
-                  />
+                  {/* Peça é uma unidade (020): sem mais e menos. */}
+                  {linha.tipo !== "peca_extensao" && (
+                    <Quantidade
+                      nome={linha.nome}
+                      valor={linha.quantidade}
+                      aoTrocar={(quantidade) =>
+                        mudarLinha(indice, { quantidade })
+                      }
+                    />
+                  )}
 
                   <CampoMoeda
                     rotulo={`Valor de ${linha.nome}`}

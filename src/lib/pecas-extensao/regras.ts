@@ -515,6 +515,37 @@ export function pecaCasaComTermo(peca: { codigo: string }, termo: string) {
   return normalizar(peca.codigo).includes(alvo);
 }
 
+/** Medida não informada: nunca 0, que seria outro dado. */
+function medidaOuTraco(valor: number | null, unidade: string) {
+  const numero =
+    valor === null
+      ? "—"
+      : valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
+  return `${numero} ${unidade}`;
+}
+
+/**
+ * "Castanho · 100 g · 55 cm": o que ela confere para reconhecer a peça
+ * na conta. O que não foi informado vira "—".
+ */
+export function resumoDaPeca(peca: {
+  cor: string | null;
+  gramas: number | null;
+  comprimentoCm: number | null;
+}) {
+  return [
+    peca.cor ?? "—",
+    medidaOuTraco(peca.gramas, "g"),
+    medidaOuTraco(peca.comprimentoCm, "cm"),
+  ].join(" · ");
+}
+
+/** A descrição do item da peça na conta — a mesma que a action grava. */
+export function descricaoDaPecaNaConta(codigo: string) {
+  return `Extensão ${codigo}`;
+}
+
 /**
  * Busca da peça na conta: a chave do índice da 018 (`chaveCodigo`, trim
  * + lower), "contém". Termo vazio casa com tudo.

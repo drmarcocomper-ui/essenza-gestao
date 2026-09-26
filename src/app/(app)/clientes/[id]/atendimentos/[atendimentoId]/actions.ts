@@ -36,6 +36,7 @@ import {
 import {
   MENSAGEM_PECA_REPETIDA_NA_CONTA,
   MENSAGEM_PECA_SUMIU_DA_CONTA,
+  descricaoDaPecaNaConta,
   mensagemPecaDesmembradaNaConta,
   mensagemPecaEmOutraConta,
   pecaVendavelNaConta,
@@ -243,7 +244,7 @@ export async function fecharConta(
         produto_id: null,
         peca_extensao_id: peca.id,
         // Snapshot do código vindo do banco, como o nome do serviço.
-        descricao: `Extensão ${peca.codigo}`,
+        descricao: descricaoDaPecaNaConta(peca.codigo),
         // O schema já recusou tudo que não é 1 (`chk_item_peca_quantidade`).
         quantidade: 1,
         valor_unitario: item.valorUnitario,
