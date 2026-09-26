@@ -179,3 +179,20 @@ describe("rotas do módulo de fórmula e atendimento", () => {
     expect(rotaExiste(caminho)).toBe(true);
   });
 });
+
+describe("link do Caixa para a conta do atendimento", () => {
+  /**
+   * A edição de um lançamento de conta manda para o atendimento, onde a
+   * conta é reaberta. O link é montado com template literal no
+   * servidor; se o caminho mudar, é aqui que quebra, não no celular.
+   */
+  it("o link está na edição e resolve para a página do atendimento", () => {
+    const pagina = readFileSync(
+      path.join(RAIZ, "src/app/(app)/caixa/[id]/editar/page.tsx"),
+      "utf8",
+    );
+
+    expect(linksDoArquivo(pagina)).toContain("/clientes/:dyn/atendimentos/:dyn");
+    expect(rotaExiste("/clientes/:dyn/atendimentos/:dyn")).toBe(true);
+  });
+});
