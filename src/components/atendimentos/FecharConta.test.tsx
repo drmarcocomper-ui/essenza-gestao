@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type {
+  ProdutoCatalogo,
+  ServicoCatalogo,
+} from "@/lib/atendimentos/consultas";
 import type { PecaVendavel } from "@/lib/pecas-extensao/consultas";
 
 import FecharConta, { type LinhaItem } from "./FecharConta";
@@ -123,5 +127,105 @@ describe("FecharConta — bloco Peças de extensão", () => {
     const itens = screen.getByRole("heading", { name: /Itens/ }).parentElement!;
 
     expect(within(itens).getByText("Castanho · 100 g · 55 cm")).toBeInTheDocument();
+  });
+});
+
+describe("FecharConta — lista do catálogo", () => {
+  const servico = (nome: string, categoria: string | null): ServicoCatalogo => ({
+    id: `s-${nome}`,
+    nome,
+    categoria,
+    preco: 100,
+    semPreco: false,
+  });
+  const produto = (nome: string, preco: number | null = 50): ProdutoCatalogo => ({
+    id: `p-${nome}`,
+    nome,
+    preco,
+  });
+
+  function montarCatalogo(servicos: ServicoCatalogo[], produtos: ProdutoCatalogo[]) {
+    return render(
+      <FecharConta
+        acao={vi.fn(async () => ({}))}
+        servicos={servicos}
+        produtos={produtos}
+        todosProdutos={[]}
+        itensIniciais={[]}
+        pecas={[]}
+      />,
+    );
+  }
+
+  /** Os nomes das opções de um bloco, na ordem da tela. */
+  function opcoesDoBloco(rotulo: string) {
+    const bloco = screen.getByText(rotulo).closest("details")!;
+
+    return within(bloco)
+      .getAllByRole("button")
+      .map((botao) => botao.textContent);
+  }
+
+  it("serviços em ordem alfabética dentro do bloco, sem olhar maiúscula nem acento", () => {
+    montarCatalogo(
+      [
+        servico("Selagem", "tratamento"),
+        servico("lumiére", "tratamento"),
+        servico("Área de teste", "tratamento"),
+        servico("Hidratação", "tratamento"),
+      ],
+      [],
+    );
+
+    expect(opcoesDoBloco("Tratamento")).toEqual([
+      "Área de teste",
+      "Hidratação",
+      "lumiére",
+      "Selagem",
+    ]);
+  });
+
+  it("produtos em ordem alfabética, mantendo o · sem preço", () => {
+    montarCatalogo([], [produto("Óleo"), produto("máscara", null), produto("Leave-in")]);
+
+    expect(opcoesDoBloco("Produtos")).toEqual([
+      "Leave-in",
+      "máscara · sem preço",
+      "Óleo",
+    ]);
+  });
+
+  it("os blocos seguem a ordem das categorias, com Produtos depois", () => {
+    montarCatalogo(
+      [servico("Alongamento", "extensao"), servico("Zero", "tratamento")],
+      [produto("Óleo")],
+    );
+
+    const rotulos = [...document.querySelectorAll("summary")].map(
+      (resumo) => resumo.textContent,
+    );
+
+    expect(rotulos).toEqual(["Tratamento", "Extensão", "Produtos"]);
+  });
+
+  it("tocar marca e tocar de novo desmarca, serviço e produto", () => {
+    const { container } = montarCatalogo(
+      [servico("Corte feminino", "corte")],
+      [produto("Óleo")],
+    );
+    const corte = screen.getByRole("button", { name: "Corte feminino" });
+    const oleo = screen.getByRole("button", { name: "Óleo" });
+
+    fireEvent.click(corte);
+    fireEvent.click(oleo);
+
+    expect(corte).toHaveAttribute("aria-pressed", "true");
+    expect(oleo).toHaveAttribute("aria-pressed", "true");
+    expect(escondidos(container, "item_tipo")).toEqual(["servico", "produto"]);
+
+    fireEvent.click(corte);
+
+    expect(corte).toHaveAttribute("aria-pressed", "false");
+    expect(escondidos(container, "item_tipo")).toEqual(["produto"]);
   });
 });

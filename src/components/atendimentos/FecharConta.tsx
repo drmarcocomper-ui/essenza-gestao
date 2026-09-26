@@ -7,6 +7,7 @@ import type { EstadoConta } from "@/app/(app)/clientes/[id]/atendimentos/[atendi
 import {
   ChipDeCatalogo,
   GrupoDeChips,
+  MarcaDeEscolha,
 } from "@/components/atendimentos/ChipsDeCatalogo";
 import {
   diferencaConta,
@@ -48,7 +49,7 @@ import {
   descricaoDaPecaNaConta,
   resumoDaPeca,
 } from "@/lib/pecas-extensao/regras";
-import { agruparPorCategoria } from "@/lib/servicos/grupos";
+import { agruparPorCategoria, ordenarPorNome } from "@/lib/servicos/grupos";
 
 export type LinhaItem = {
   tipo: TipoItem;
@@ -144,7 +145,7 @@ const classeCampo =
  * A conta do atendimento — a tela que substitui a calculadora.
  *
  * Ela soma na frente da cliente, então tudo aqui é toque: os serviços
- * são chips agrupados por categoria (24 num monte só viram rolagem
+ * são uma lista agrupada por categoria (24 num monte só viram rolagem
  * pura), a quantidade tem botão de mais e menos, e o valor abre teclado
  * numérico com a máscara montando de centavo para a esquerda.
  *
@@ -459,7 +460,7 @@ export default function FecharConta({
                 .length
             }
           >
-            {produtos.map((produto) => (
+            {ordenarPorNome(produtos).map((produto) => (
               <ChipDeCatalogo
                 key={produto.id}
                 nome={produto.nome}
@@ -658,7 +659,8 @@ export default function FecharConta({
                             : "border-neutral-300 bg-white text-neutral-700 active:bg-neutral-100"
                         }`}
                       >
-                        <span className="font-medium">{peca.codigo}</span>
+                        <MarcaDeEscolha marcado={marcada} />
+                        <span className="ml-1 font-medium">{peca.codigo}</span>
                         <span
                           className={`min-w-0 truncate ${
                             marcada ? "text-rose-100" : "text-neutral-500"

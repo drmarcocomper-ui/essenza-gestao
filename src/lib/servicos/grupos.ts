@@ -20,8 +20,26 @@ import { CATEGORIAS, ROTULOS_CATEGORIA, type CategoriaServico } from "./schema";
  */
 export const SEM_CATEGORIA = "";
 
+/**
+ * Ordem alfabética de nome, como ela lê: maiúscula e acento não mudam a
+ * posição ("Área" fica junto de "Area", "lumiére" entre os L).
+ *
+ * Garantida aqui, e não pelo `order by nome` da consulta, que depende da
+ * collation do banco. Empate — o mesmo nome em grafias diferentes —
+ * mantém a ordem de chegada. Serviços (dentro dos blocos) e produtos
+ * usam esta mesma, para as duas listas lerem do mesmo jeito.
+ */
+export function ordenarPorNome<T extends { nome: string }>(
+  itens: readonly T[],
+): T[] {
+  return [...itens].sort((a, b) =>
+    a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }),
+  );
+}
+
 /** O mínimo que o agrupamento precisa saber sobre um serviço. */
 export type ServicoAgrupavel = {
+  nome: string;
   /** `servicos.categoria` cru: null e valor fora da lista são previstos. */
   categoria: string | null;
 };
@@ -55,8 +73,7 @@ function chaveDeGrupo(categoria: string | null) {
  * onde cada coisa está e toca sem ler. Bloco vazio não aparece — um
  * acordeão que abre para nada é toque perdido.
  *
- * Dentro de cada bloco a ordem é a que veio, que é o `order by nome` da
- * consulta.
+ * Dentro de cada bloco, ordem alfabética de nome (`ordenarPorNome`).
  */
 export function agruparPorCategoria<T extends ServicoAgrupavel>(
   servicos: readonly T[],
@@ -72,8 +89,10 @@ export function agruparPorCategoria<T extends ServicoAgrupavel>(
   return grupos
     .map((grupo) => ({
       ...grupo,
-      servicos: servicos.filter(
-        (servico) => chaveDeGrupo(servico.categoria) === grupo.chave,
+      servicos: ordenarPorNome(
+        servicos.filter(
+          (servico) => chaveDeGrupo(servico.categoria) === grupo.chave,
+        ),
       ),
     }))
     .filter((grupo) => grupo.servicos.length > 0);
