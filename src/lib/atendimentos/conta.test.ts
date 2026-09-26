@@ -22,16 +22,18 @@ import {
   PRAZO_DIAS_CARTAO,
   titularidadeDe,
   totalItens,
+  type TipoItem,
 } from "@/lib/atendimentos/conta";
 import { FORMAS_PAGAMENTO } from "@/lib/caixa/schema";
 
 const SERVICO = "11111111-1111-4111-8111-111111111111";
 const PRODUTO = "22222222-2222-4222-8222-222222222222";
+const PECA = "33333333-3333-4333-8333-333333333333";
 
 const item = (
   valorUnitario: number,
   quantidade = 1,
-  extra: { tipo?: "servico" | "produto"; categoria?: string | null } = {},
+  extra: { tipo?: TipoItem; categoria?: string | null } = {},
 ) => ({ quantidade, valorUnitario, tipo: "servico" as const, ...extra });
 
 describe("total dos itens", () => {
@@ -1077,5 +1079,90 @@ describe("fechamento só crédito sem data de pagamento", () => {
       ["Cartão de crédito", "Pendente", null],
       ["Dinheiro", "Pago", "2026-09-14"],
     ]);
+  });
+});
+
+describe("item de peça de extensão (020)", () => {
+  const peca = {
+    tipo: "peca_extensao",
+    refId: PECA,
+    quantidade: "1",
+    valorUnitario: "1.200,00",
+  };
+
+  it("aceito com quantidade 1", () => {
+    expect(itemContaSchema.parse(peca)).toMatchObject({
+      tipo: "peca_extensao",
+      refId: PECA,
+      quantidade: 1,
+      valorUnitario: 1200,
+    });
+  });
+
+  it("recusado com quantidade 2: uma peça é uma unidade", () => {
+    const saida = itemContaSchema.safeParse({ ...peca, quantidade: "2" });
+
+    expect(saida.success).toBe(false);
+    expect(saida.error?.issues[0]?.message).toBe("Peça de extensão é uma unidade só.");
+  });
+
+  it("zero digitado é aceito, vazio não", () => {
+    expect(itemContaSchema.parse({ ...peca, valorUnitario: "0,00" }).valorUnitario).toBe(0);
+    expect(itemContaSchema.safeParse({ ...peca, valorUnitario: "" }).success).toBe(false);
+  });
+
+  it("sem id da peça é recusado, mesmo com nome e “novo”", () => {
+    expect(
+      itemContaSchema.safeParse({ ...peca, refId: "", nome: "Extensão 1254", novo: "1" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("categoria: peça sozinha é Produto", () => {
+    expect(categoriaDaConta([item(1200, 1, { tipo: "peca_extensao" })])).toBe("Produto");
+  });
+
+  it("categoria: peça com produto continua Produto", () => {
+    expect(
+      categoriaDaConta([
+        item(1200, 1, { tipo: "peca_extensao" }),
+        item(90, 1, { tipo: "produto" }),
+      ]),
+    ).toBe("Produto");
+  });
+
+  it("categoria: serviço + peça mistura e cai em Serviço, como hoje", () => {
+    expect(
+      categoriaDaConta([
+        item(300, 1, { categoria: "extensao" }),
+        item(1200, 1, { tipo: "peca_extensao" }),
+      ]),
+    ).toBe("Serviço");
+  });
+
+  it("lê o tipo peca_extensao do formulário", () => {
+    const formData = new FormData();
+
+    formData.append("data_caixa", "2026-09-20");
+    formData.append("item_tipo", "peca_extensao");
+    formData.append("item_ref", PECA);
+    formData.append("item_nome", "Extensão 1254");
+    formData.append("item_novo", "0");
+    formData.append("item_quantidade", "1");
+    formData.append("item_valor", "1.200,00");
+    formData.append("forma_instituicao", "Dinheiro");
+    formData.append("forma_titularidade", "");
+    formData.append("forma_modalidade", "");
+    formData.append("forma_parcelas", "1");
+    formData.append("forma_valor", "1.200,00");
+
+    const saida = contaSchema.safeParse(lerConta(formData));
+
+    expect(saida.success).toBe(true);
+    expect(saida.data?.itens[0]).toMatchObject({
+      tipo: "peca_extensao",
+      refId: PECA,
+      quantidade: 1,
+    });
   });
 });

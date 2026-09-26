@@ -139,6 +139,11 @@ export default async function AtendimentoPage({
  * de propósito (cortesia), a segunda tentativa reabre com o preço do
  * catálogo e ela zera de novo. É o caso raro; o comum é o item de 4A
  * chegando aqui em zero, e esse não pode mostrar valor nenhum.
+ *
+ * A peça de extensão é outra história: a 4A não a oferece, então o item
+ * de peça só existe porque esta conta já foi fechada (e reaberta) ou
+ * tentou fechar. O valor dele é o que ela digitou — zero incluído, que
+ * aí é cortesia de verdade — e volta como está.
  */
 function itensIniciais(
   atendimento: AtendimentoDetalhe,
@@ -146,6 +151,16 @@ function itensIniciais(
   produtos: { id: string; preco: number | null }[],
 ): LinhaItem[] {
   return atendimento.itens.map((item) => {
+    if (item.tipo === "peca_extensao") {
+      return {
+        tipo: item.tipo,
+        refId: item.pecaExtensaoId ?? "",
+        nome: item.descricao,
+        quantidade: 1,
+        valor: paraCampo(item.valorUnitario),
+      };
+    }
+
     const doCatalogo =
       item.tipo === "servico"
         ? servicos.find((servico) => servico.id === item.servicoId)
@@ -159,14 +174,15 @@ function itensIniciais(
       refId: (item.tipo === "servico" ? item.servicoId : item.produtoId) ?? "",
       nome: item.descricao,
       quantidade: item.quantidade > 0 ? Math.round(item.quantidade) : 1,
-      valor:
-        preco === null
-          ? ""
-          : preco.toLocaleString("pt-BR", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }),
+      valor: preco === null ? "" : paraCampo(preco),
     };
+  });
+}
+
+function paraCampo(valor: number) {
+  return valor.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 

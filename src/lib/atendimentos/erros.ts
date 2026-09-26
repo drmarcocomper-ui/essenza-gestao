@@ -11,6 +11,8 @@
  * produção, e a frase da tela sempre diz qual dos dois caminhos seguir.
  */
 
+import { mensagemPecaEmOutraConta } from "@/lib/pecas-extensao/regras";
+
 /** Onde a gravação parou. Muda o que a mensagem pode afirmar. */
 export type EtapaConta = "limpar" | "itens" | "lancamentos";
 
@@ -35,12 +37,29 @@ function detalhes(erro: unknown) {
       .join(" ");
 
     const codigo = typeof bruto.code === "string" ? bruto.code : "";
+    const detalhe = typeof bruto.details === "string" ? bruto.details : "";
 
-    return { mensagem: textos, codigo };
+    return { mensagem: textos, codigo, detalhe };
   }
 
-  return { mensagem: String(erro ?? ""), codigo: "" };
+  return { mensagem: String(erro ?? ""), codigo: "", detalhe: "" };
 }
+
+/** O índice da 020: uma peça, um item. */
+const INDICE_PECA_UNICA = "uq_atendimento_itens_peca_extensao";
+
+/**
+ * O id da peça repetida, lido do `details` do Postgres —
+ * `Key (peca_extensao_id)=(<uuid>) already exists.` —, ou null.
+ */
+function pecaDoDetalhe(detalhe: string) {
+  return detalhe.match(/\(peca_extensao_id\)=\(([^)]+)\)/)?.[1] ?? null;
+}
+
+export type ContextoFalhaConta = {
+  /** Código da peça pelo id, para o 23505 do índice da 020 nomeá-la. */
+  codigoDaPeca?: (id: string) => string | null;
+};
 
 /**
  * O que sobra em cada etapa quando ela falha. A frase precisa dizer em
@@ -57,9 +76,31 @@ const RESTO: Record<EtapaConta, string> = {
 export function classificarFalhaConta(
   etapa: EtapaConta,
   erro: unknown,
+  contexto: ContextoFalhaConta = {},
 ): FalhaConta {
-  const { mensagem, codigo } = detalhes(erro);
+  const { mensagem, codigo, detalhe } = detalhes(erro);
   const resto = RESTO[etapa];
+
+  // 23505 unique_violation. O do índice da 020 é a peça que entrou em
+  // outra conta entre a tela e o toque: tentar de novo recusa igual, e o
+  // que resolve é tirar a peça. Pelo nome do índice na mensagem; o
+  // código da peça sai do `details`, quando dá.
+  if (codigo === "23505") {
+    if (mensagem.includes(INDICE_PECA_UNICA)) {
+      const id = pecaDoDetalhe(detalhe);
+      const codigoPeca = id ? (contexto.codigoDaPeca?.(id) ?? null) : null;
+
+      return {
+        texto: `${mensagemPecaEmOutraConta(codigoPeca)} ${resto}`,
+        podeTentarDeNovo: false,
+      };
+    }
+
+    return {
+      texto: `O banco recusou o que a tela mandou. ${resto} Avise o Marco.`,
+      podeTentarDeNovo: false,
+    };
+  }
 
   // 42501 é insufficient_privilege; a mensagem de RLS vem sem código
   // próprio, dentro do texto.

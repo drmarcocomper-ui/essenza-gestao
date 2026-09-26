@@ -10,6 +10,7 @@ import {
   lerConta,
   parcelasDaForma,
   type CampoConta,
+  type TipoItem,
 } from "@/lib/atendimentos/conta";
 import {
   listarProdutosParaConferencia,
@@ -28,6 +29,17 @@ import {
 } from "@/lib/atendimentos/produtos";
 import { exigirSessao } from "@/lib/auth";
 import { MENSAGEM_CONTA_JA_ABERTA } from "@/lib/caixa/travas";
+import {
+  lerPecasParaConta,
+  type PecaParaConta,
+} from "@/lib/pecas-extensao/consultas";
+import {
+  MENSAGEM_PECA_REPETIDA_NA_CONTA,
+  MENSAGEM_PECA_SUMIU_DA_CONTA,
+  mensagemPecaDesmembradaNaConta,
+  mensagemPecaEmOutraConta,
+  pecaVendavelNaConta,
+} from "@/lib/pecas-extensao/regras";
 
 export type EstadoConta = {
   erros?: Partial<Record<CampoConta, string>>;
@@ -36,9 +48,10 @@ export type EstadoConta = {
 
 /** Linha pronta para `atendimento_itens`, já com o nome vindo do banco. */
 type ItemResolvido = {
-  tipo: "servico" | "produto";
+  tipo: TipoItem;
   servico_id: string | null;
   produto_id: string | null;
+  peca_extensao_id: string | null;
   descricao: string;
   quantidade: number;
   valor_unitario: number;
@@ -100,6 +113,37 @@ async function resolverProdutoNovo(
   todos.push(criado);
 
   return { ok: true, id: criado.id, nome: criado.nome };
+}
+
+/**
+ * Confere as peças de extensão que a tela mandou, relidas do banco
+ * (`lerPecasParaConta`). Devolve o motivo da recusa, ou null.
+ *
+ * A mesma regra da tela (`pecaVendavelNaConta`): a peça existe, não foi
+ * desmembrada e não é item de OUTRO atendimento — a desta mesma conta
+ * (reaberta) passa. A mesma peça duas vezes também é recusada aqui, antes
+ * do índice único da 020 recusar no insert.
+ */
+function conferirPecas(
+  ids: readonly string[],
+  pecas: readonly PecaParaConta[],
+  atendimentoId: string,
+) {
+  if (new Set(ids).size !== ids.length) return MENSAGEM_PECA_REPETIDA_NA_CONTA;
+
+  for (const id of ids) {
+    const peca = pecas.find((linha) => linha.id === id);
+
+    if (!peca) return MENSAGEM_PECA_SUMIU_DA_CONTA;
+
+    if (pecaVendavelNaConta(peca, atendimentoId)) continue;
+
+    return peca.temFilhas
+      ? mensagemPecaDesmembradaNaConta(peca.codigo)
+      : mensagemPecaEmOutraConta(peca.codigo);
+  }
+
+  return null;
 }
 
 /**
@@ -165,17 +209,50 @@ export async function fecharConta(
   // É migration, e fica para uma sessão de migration.
 
   const temProdutoNovo = conta.itens.some((item) => !item.refId);
+  const idsPecas = conta.itens
+    .filter((item) => item.tipo === "peca_extensao")
+    .map((item) => item.refId);
 
-  const [servicos, produtos, todos] = await Promise.all([
+  const [servicos, produtos, todos, pecas] = await Promise.all([
     listarServicos({ incluirInativos: true }),
     listarProdutosRevenda(),
     // A tabela inteira só quando há nome a conferir.
     temProdutoNovo ? listarProdutosParaConferencia() : [],
+    lerPecasParaConta(idsPecas),
   ]);
+
+  // As peças são conferidas ANTES do laço: o laço pode cadastrar produto
+  // novo, e uma peça recusada depois disso deixaria o cadastro feito à
+  // toa.
+  const recusaPeca = conferirPecas(idsPecas, pecas, atendimentoId);
+
+  if (recusaPeca) {
+    return { erros: { itens: recusaPeca } };
+  }
 
   const itens: ItemResolvido[] = [];
 
   for (const item of conta.itens) {
+    if (item.tipo === "peca_extensao") {
+      // Existe: `conferirPecas` acabou de conferir.
+      const peca = pecas.find((linha) => linha.id === item.refId)!;
+
+      itens.push({
+        tipo: "peca_extensao",
+        servico_id: null,
+        produto_id: null,
+        peca_extensao_id: peca.id,
+        // Snapshot do código vindo do banco, como o nome do serviço.
+        descricao: `Extensão ${peca.codigo}`,
+        // O schema já recusou tudo que não é 1 (`chk_item_peca_quantidade`).
+        quantidade: 1,
+        valor_unitario: item.valorUnitario,
+        categoria: null,
+      });
+
+      continue;
+    }
+
     if (item.tipo === "servico") {
       const servico = servicos.find((linha) => linha.id === item.refId);
 
@@ -189,6 +266,7 @@ export async function fecharConta(
         tipo: "servico",
         servico_id: servico.id,
         produto_id: null,
+        peca_extensao_id: null,
         // Snapshot do nome vindo do banco, não do navegador: o item
         // sobrevive à renomeação do catálogo, e o POST não escolhe texto.
         descricao: servico.nome,
@@ -224,6 +302,7 @@ export async function fecharConta(
       tipo: "produto",
       servico_id: null,
       produto_id: produto.id,
+      peca_extensao_id: null,
       descricao: produto.nome,
       quantidade: item.quantidade,
       valor_unitario: item.valorUnitario,
@@ -260,6 +339,7 @@ export async function fecharConta(
       tipo: item.tipo,
       servico_id: item.servico_id,
       produto_id: item.produto_id,
+      peca_extensao_id: item.peca_extensao_id,
       descricao: item.descricao,
       quantidade: item.quantidade,
       valor_unitario: item.valor_unitario,
@@ -269,7 +349,12 @@ export async function fecharConta(
   if (erroItens) {
     registrarFalhaConta("itens", erroItens);
 
-    return { mensagem: classificarFalhaConta("itens", erroItens).texto };
+    return {
+      mensagem: classificarFalhaConta("itens", erroItens, {
+        codigoDaPeca: (id) =>
+          pecas.find((peca) => peca.id === id)?.codigo ?? null,
+      }).texto,
+    };
   }
 
   // (c) — o dinheiro por último. Um lançamento por PARCELA de cada forma

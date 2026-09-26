@@ -25,6 +25,7 @@ import {
   totalItens,
   totalFormas,
   type Instituicao,
+  type TipoItem,
   type ModalidadeCartao,
   type TitularidadeConta,
 } from "@/lib/atendimentos/conta";
@@ -44,8 +45,8 @@ import { mascararMoeda, moedaParaNumero } from "@/lib/formatters";
 import { agruparPorCategoria } from "@/lib/servicos/grupos";
 
 export type LinhaItem = {
-  tipo: "servico" | "produto";
-  /** `servico_id` ou `produto_id`. Vazio no produto novo. */
+  tipo: TipoItem;
+  /** `servico_id`, `produto_id` ou `peca_extensao_id`. Vazio no produto novo. */
   refId: string;
   nome: string;
   quantidade: number;

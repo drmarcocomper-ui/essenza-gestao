@@ -1,3 +1,4 @@
+import type { TipoItem } from "@/lib/atendimentos/conta";
 import type { ProdutoConferivel } from "@/lib/atendimentos/produtos";
 import { exigirSessao } from "@/lib/auth";
 import { compararPorParcela } from "@/lib/caixa/parcela";
@@ -62,11 +63,29 @@ export type AtendimentoNaLista = {
   total: number;
 };
 
+/** A peça de extensão de um item, como a conta a mostra. */
+export type PecaDoItem = {
+  id: string;
+  codigo: string;
+  cor: string | null;
+  gramas: number | null;
+  comprimentoCm: number | null;
+};
+
+/** numeric do PostgREST (string) → número; null continua null. */
+function numeroOuNulo(valor: number | string | null) {
+  return valor === null ? null : Number(valor);
+}
+
 export type ItemDoAtendimento = {
   id: string;
-  tipo: "servico" | "produto";
+  tipo: TipoItem;
   servicoId: string | null;
   produtoId: string | null;
+  /** Só no item de peça de extensão (020). */
+  pecaExtensaoId: string | null;
+  /** A peça do item, para a conta mostrar e linkar; null fora dela. */
+  peca: PecaDoItem | null;
   /** Snapshot do nome no momento da venda. */
   descricao: string;
   quantidade: number;
@@ -281,7 +300,7 @@ export async function obterAtendimento(
   const { data, error } = await supabase
     .from("atendimentos")
     .select(
-      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa, status, parcelamento, forma_pagamento), formulas(id)",
+      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, peca_extensao_id, descricao, quantidade, valor_unitario, pecas_extensao(codigo, cor, gramas, comprimento_cm)), lancamentos(id, instituicao, titularidade, valor, data_caixa, status, parcelamento, forma_pagamento), formulas(id)",
     )
     .eq("id", atendimentoId)
     .eq("cliente_id", clienteId)
@@ -302,9 +321,16 @@ export async function obterAtendimento(
     observacao: string | null;
     atendimento_itens: {
       id: string;
-      tipo: "servico" | "produto";
+      tipo: TipoItem;
       servico_id: string | null;
       produto_id: string | null;
+      peca_extensao_id: string | null;
+      pecas_extensao: {
+        codigo: string;
+        cor: string | null;
+        gramas: number | string | null;
+        comprimento_cm: number | string | null;
+      } | null;
       descricao: string;
       quantidade: number | string;
       valor_unitario: number | string;
@@ -332,6 +358,17 @@ export async function obterAtendimento(
       tipo: item.tipo,
       servicoId: item.servico_id,
       produtoId: item.produto_id,
+      pecaExtensaoId: item.peca_extensao_id,
+      peca:
+        item.peca_extensao_id && item.pecas_extensao
+          ? {
+              id: item.peca_extensao_id,
+              codigo: item.pecas_extensao.codigo,
+              cor: item.pecas_extensao.cor,
+              gramas: numeroOuNulo(item.pecas_extensao.gramas),
+              comprimentoCm: numeroOuNulo(item.pecas_extensao.comprimento_cm),
+            }
+          : null,
       descricao: item.descricao,
       quantidade: Number(item.quantidade),
       valorUnitario: Number(item.valor_unitario),

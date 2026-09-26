@@ -399,14 +399,27 @@ export const CATEGORIA_PRODUTO = "Produto";
  */
 export const CATEGORIA_PADRAO = "Serviço";
 
+/**
+ * Os três tipos de `atendimento_itens.tipo` (001 e 020). A peça de
+ * extensão aponta para `pecas_extensao`, não para o produto de catálogo
+ * "Extensão capilar do Sul do Brasil", que continua sendo produto.
+ */
+export const TIPOS_ITEM = ["servico", "produto", "peca_extensao"] as const;
+
+export type TipoItem = (typeof TIPOS_ITEM)[number];
+
 export type ItemClassificavel = {
-  tipo: "servico" | "produto";
+  tipo: TipoItem;
   /** `servicos.categoria` crua; null e valor desconhecido são previstos. */
   categoria?: string | null;
 };
 
 function categoriaDoItem(item: ItemClassificavel) {
-  if (item.tipo === "produto") return CATEGORIA_PRODUTO;
+  // A peça de extensão é venda de mercadoria, como o produto: "Produto".
+  // "Manutenção Extensão" é o SERVIÇO de pôr e tirar, outra coisa.
+  if (item.tipo === "produto" || item.tipo === "peca_extensao") {
+    return CATEGORIA_PRODUTO;
+  }
 
   const categoria = item.categoria;
 
@@ -506,11 +519,12 @@ const valorObrigatorio = z.string().transform((bruto, ctx) => {
 
 export const itemContaSchema = z
   .object({
-    tipo: z.enum(["servico", "produto"], { message: "Item inválido" }),
+    tipo: z.enum(TIPOS_ITEM, { message: "Item inválido" }),
 
-    // `chk_item_referencia` (001) exige a referência do lado certo: item
-    // sem id de catálogo não existe. A única exceção é o produto novo,
-    // conferida abaixo — a action cadastra antes de gravar o item.
+    // `chk_item_referencia` (001, 020) exige a referência do lado certo:
+    // item sem id não existe. A única exceção é o produto novo, conferida
+    // abaixo — a action cadastra antes de gravar o item. Na peça de
+    // extensão é o id da peça.
     refId: z.string().trim(),
 
     /** Nome digitado. Só o produto novo usa; o resto vem do banco. */
@@ -539,6 +553,15 @@ export const itemContaSchema = z
     valorUnitario: valorObrigatorio,
   })
   .superRefine((item, ctx) => {
+    // Uma peça é uma unidade (`chk_item_peca_quantidade`, 020).
+    if (item.tipo === "peca_extensao" && item.quantidade !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["quantidade"],
+        message: "Peça de extensão é uma unidade só.",
+      });
+    }
+
     if (z.uuid().safeParse(item.refId).success) return;
 
     if (item.tipo !== "produto" || !item.novo) {
