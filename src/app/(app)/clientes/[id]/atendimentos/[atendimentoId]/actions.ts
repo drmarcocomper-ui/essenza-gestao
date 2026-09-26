@@ -27,6 +27,7 @@ import {
   type ProdutoConferivel,
 } from "@/lib/atendimentos/produtos";
 import { exigirSessao } from "@/lib/auth";
+import { MENSAGEM_CONTA_JA_ABERTA } from "@/lib/caixa/travas";
 
 export type EstadoConta = {
   erros?: Partial<Record<CampoConta, string>>;
@@ -325,5 +326,57 @@ export async function fecharConta(
   revalidatePath("/caixa/pendentes");
 
   // Sem redirect: ela fica onde está, e a tela volta já em modo fechado.
+  return {};
+}
+
+/**
+ * Reabre a conta: apaga os lançamentos dela, e só eles.
+ *
+ * Conta fechada é "existe lançamento com este atendimento_id"; sem eles,
+ * a tela volta ao modo aberto e o `fecharConta` acima funciona sem
+ * mudança — os itens ficam gravados e reaparecem na conta.
+ *
+ * UM delete, filtrado pelo `atendimento_id` EXATO. Nunca por "is not
+ * null" nem por outra coluna: filtro a mais poderia deixar metade da
+ * conta para trás, e filtro a menos apagaria a conta de todo mundo.
+ * O `select('id')` conta o que saiu; zero é conta que já estava aberta
+ * (outra aba, outro aparelho).
+ *
+ * A mensagem volta como valor: em produção o Next troca a de um erro
+ * lançado no servidor por um texto genérico em inglês.
+ */
+export async function reabrirConta(
+  clienteId: string,
+  atendimentoId: string,
+): Promise<{ erro?: string }> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .delete()
+    .eq("atendimento_id", atendimentoId)
+    .select("id");
+
+  if (error) {
+    return { erro: `Não foi possível reabrir a conta: ${error.message}` };
+  }
+
+  const apagados = (data ?? []) as { id: string }[];
+
+  if (apagados.length === 0) {
+    return { erro: MENSAGEM_CONTA_JA_ABERTA };
+  }
+
+  // A conta, a ficha da cliente (fechada e total), o Caixa, A receber e a
+  // edição de cada lançamento que deixou de existir.
+  revalidatePath(`/clientes/${clienteId}/atendimentos/${atendimentoId}`);
+  revalidatePath(`/clientes/${clienteId}`);
+  revalidatePath("/caixa");
+  revalidatePath("/caixa/pendentes");
+
+  for (const { id } of apagados) {
+    revalidatePath(`/caixa/${id}/editar`);
+  }
+
   return {};
 }

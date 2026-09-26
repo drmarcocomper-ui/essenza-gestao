@@ -83,6 +83,8 @@ export type FormaDaConta = {
   status: "Pago" | "Pendente";
   /** "1/3" em crédito parcelado. Texto cru: ver `lerParcela`. */
   parcelamento: string | null;
+  /** "Cartão de crédito", "Pix"… Null quando não informada. */
+  formaPagamento: string | null;
 };
 
 export type AtendimentoDetalhe = {
@@ -279,7 +281,7 @@ export async function obterAtendimento(
   const { data, error } = await supabase
     .from("atendimentos")
     .select(
-      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa, status, parcelamento), formulas(id)",
+      "id, cliente_id, data, observacao, atendimento_itens(id, tipo, servico_id, produto_id, descricao, quantidade, valor_unitario), lancamentos(id, instituicao, titularidade, valor, data_caixa, status, parcelamento, forma_pagamento), formulas(id)",
     )
     .eq("id", atendimentoId)
     .eq("cliente_id", clienteId)
@@ -315,6 +317,7 @@ export async function obterAtendimento(
       data_caixa: string | null;
       status: "Pago" | "Pendente";
       parcelamento: string | null;
+      forma_pagamento: string | null;
     }[];
     formulas: { id: string }[];
   };
@@ -343,6 +346,7 @@ export async function obterAtendimento(
       dataCaixa: lancamento.data_caixa,
       status: lancamento.status,
       parcelamento: lancamento.parcelamento,
+      formaPagamento: lancamento.forma_pagamento,
     })),
     formulaId: linha.formulas[0]?.id ?? null,
     fechada: linha.lancamentos.length > 0,

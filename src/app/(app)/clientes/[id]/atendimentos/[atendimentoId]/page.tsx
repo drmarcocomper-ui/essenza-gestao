@@ -3,10 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FlaskConical, Lock, Plus } from "lucide-react";
 
-import { fecharConta } from "@/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/actions";
+import {
+  fecharConta,
+  reabrirConta,
+} from "@/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/actions";
 import FecharConta, {
   type LinhaItem,
 } from "@/components/atendimentos/FecharConta";
+import ReabrirConta from "@/components/atendimentos/ReabrirConta";
 import ChipParcela from "@/components/caixa/ChipParcela";
 import { emCentavos, totalLinha } from "@/lib/atendimentos/conta";
 import {
@@ -16,6 +20,7 @@ import {
   obterAtendimento,
   type AtendimentoDetalhe,
 } from "@/lib/atendimentos/consultas";
+import { resumoReabertura } from "@/lib/atendimentos/reabertura";
 import { obterCliente } from "@/lib/clientes/consultas";
 import { formatarData, formatarDiaMes, formatarMoeda } from "@/lib/formatters";
 
@@ -101,7 +106,11 @@ export default async function AtendimentoPage({
       </Link>
 
       {atendimento.fechada ? (
-        <ContaFechada atendimento={atendimento} />
+        <ContaFechada
+          atendimento={atendimento}
+          // Os dois ids amarrados no servidor, como no fechamento.
+          reabrir={reabrirConta.bind(null, cliente.id, atendimento.id)}
+        />
       ) : (
         <FecharConta
           // Os dois ids vêm amarrados no servidor: não trafegam em campo
@@ -164,12 +173,18 @@ function itensIniciais(
 /**
  * A conta fechada, só leitura.
  *
- * A regra é deliberada: a conta fecha uma vez. Não há botão de reabrir
- * nesta tela — um valor corrigido aqui teria que desfazer lançamento já
- * contado no mês, e essa decisão não foi tomada. O que precisar de
- * conserto sai pelo Caixa, onde o lançamento é editável.
+ * O dinheiro da conta não se conserta pelo Caixa: lá o lançamento de
+ * conta não é excluído nem muda de valor (src/lib/caixa/travas.ts). O
+ * caminho é reabrir aqui — apaga os lançamentos, mantém os itens — e
+ * fechar de novo.
  */
-function ContaFechada({ atendimento }: { atendimento: AtendimentoDetalhe }) {
+function ContaFechada({
+  atendimento,
+  reabrir,
+}: {
+  atendimento: AtendimentoDetalhe;
+  reabrir: () => Promise<{ erro?: string }>;
+}) {
   const total = atendimento.itens.reduce(
     (soma, item) => soma + totalLinha(item),
     0,
@@ -260,9 +275,11 @@ function ContaFechada({ atendimento }: { atendimento: AtendimentoDetalhe }) {
       {recebido !== total && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Os lançamentos somam {formatarMoeda(recebido / 100)}, diferente do
-          total dos itens. Confira no Caixa.
+          total dos itens. Para acertar, reabra a conta.
         </p>
       )}
+
+      <ReabrirConta acao={reabrir} resumo={resumoReabertura(atendimento.formas)} />
     </section>
   );
 }
