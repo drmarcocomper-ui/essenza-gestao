@@ -6,10 +6,12 @@ import {
   MENSAGEM_CUSTO_PARTE_OBRIGATORIO,
   MENSAGEM_CUSTO_TRAVADO_MAE,
   MENSAGEM_CUSTO_TRAVADO_PARTE,
+  MENSAGEM_DESFAZER_TRAVADO,
   MENSAGEM_DESMEMBRAR_SEM_CUSTO,
   MENSAGEM_EXCLUSAO_PARTE,
   MENSAGEM_JA_DESMEMBRADA,
   MENSAGEM_QUANTIDADE_PARTES,
+  MENSAGEM_SEM_PARTES,
 } from "@/lib/pecas-extensao/regras";
 import { CAMPOS_PECA, type CampoPeca } from "@/lib/pecas-extensao/schema";
 
@@ -17,6 +19,8 @@ const {
   obterPeca,
   pecaTemFilhas,
   listarCodigos,
+  listarPartes,
+  algumaTemFilhas,
   insert,
   update,
   remover,
@@ -25,6 +29,8 @@ const {
   obterPeca: vi.fn(),
   pecaTemFilhas: vi.fn(),
   listarCodigos: vi.fn(),
+  listarPartes: vi.fn(),
+  algumaTemFilhas: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   remover: vi.fn(),
@@ -38,6 +44,8 @@ vi.mock("@/lib/pecas-extensao/consultas", () => ({
   obterPeca,
   pecaTemFilhas,
   listarCodigos,
+  listarPartes,
+  algumaTemFilhas,
 }));
 vi.mock("@/lib/auth", () => ({
   exigirSessao: async () => ({
@@ -62,7 +70,12 @@ vi.mock("@/lib/auth", () => ({
   }),
 }));
 
-import { atualizarPeca, desmembrarPeca, excluirPeca } from "./actions";
+import {
+  atualizarPeca,
+  desfazerDesmembramento,
+  desmembrarPeca,
+  excluirPeca,
+} from "./actions";
 
 const MAE = "11111111-1111-4111-8111-111111111111";
 
@@ -108,6 +121,11 @@ beforeEach(() => {
   obterPeca.mockResolvedValue(peca());
   pecaTemFilhas.mockResolvedValue(false);
   listarCodigos.mockResolvedValue([{ id: MAE, codigo: "1254" }]);
+  listarPartes.mockResolvedValue([
+    peca({ id: "a", codigo: "1254-a", pecaMaeId: MAE }),
+    peca({ id: "b", codigo: "1254-b", pecaMaeId: MAE }),
+  ]);
+  algumaTemFilhas.mockResolvedValue(false);
 });
 
 describe("desmembrarPeca", () => {
@@ -287,5 +305,40 @@ describe("excluirPeca", () => {
   it("peça sem partes e que não é parte é excluída", async () => {
     expect(await excluirPeca(MAE)).toEqual({});
     expect(remover).toHaveBeenCalledWith("id", MAE);
+  });
+});
+
+describe("desfazerDesmembramento", () => {
+  it("apaga todas as partes num delete só, por peca_mae_id", async () => {
+    expect(await desfazerDesmembramento(MAE)).toEqual({});
+    expect(remover).toHaveBeenCalledTimes(1);
+    expect(remover).toHaveBeenCalledWith("peca_mae_id", MAE);
+    expect(algumaTemFilhas).toHaveBeenCalledWith(["a", "b"]);
+  });
+
+  it("recusa se alguma parte também foi desmembrada", async () => {
+    algumaTemFilhas.mockResolvedValue(true);
+
+    expect(await desfazerDesmembramento(MAE)).toEqual({
+      erro: MENSAGEM_DESFAZER_TRAVADO,
+    });
+    expect(remover).not.toHaveBeenCalled();
+  });
+
+  it("23503 vira o mesmo recado", async () => {
+    resultado.error = { code: "23503", message: "violates foreign key" };
+
+    expect(await desfazerDesmembramento(MAE)).toEqual({
+      erro: MENSAGEM_DESFAZER_TRAVADO,
+    });
+  });
+
+  it("peça sem partes não tem o que desfazer", async () => {
+    listarPartes.mockResolvedValue([]);
+
+    expect(await desfazerDesmembramento(MAE)).toEqual({
+      erro: MENSAGEM_SEM_PARTES,
+    });
+    expect(remover).not.toHaveBeenCalled();
   });
 });

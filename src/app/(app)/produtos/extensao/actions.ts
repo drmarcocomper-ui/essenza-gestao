@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import { exigirSessao } from "@/lib/auth";
 import {
+  algumaTemFilhas,
   listarCodigos,
+  listarPartes,
   obterPeca,
   pecaTemFilhas,
 } from "@/lib/pecas-extensao/consultas";
@@ -21,10 +23,12 @@ import {
   MENSAGEM_CODIGO_REPETIDO_PARTES,
   MENSAGEM_CODIGO_TRAVADO,
   MENSAGEM_CUSTO_PARTE_OBRIGATORIO,
+  MENSAGEM_DESFAZER_TRAVADO,
   MENSAGEM_DESMEMBRAR_SEM_CUSTO,
   MENSAGEM_EXCLUSAO_TRAVADA,
   MENSAGEM_PECA_NAO_ENCONTRADA,
   MENSAGEM_QUANTIDADE_PARTES,
+  MENSAGEM_SEM_PARTES,
   MINIMO_PARTES,
   travasDaPeca,
 } from "@/lib/pecas-extensao/regras";
@@ -343,6 +347,49 @@ export async function desmembrarPeca(
 
   revalidatePath("/produtos");
   revalidatePath(`/produtos/extensao/${mae.id}`);
+
+  return {};
+}
+
+/**
+ * Apaga TODAS as partes da peça num delete só, por `peca_mae_id` — um
+ * comando, então ou saem todas ou nenhuma. A mãe volta a ser peça sem
+ * partes: código e custo editáveis, desmembrável de novo.
+ *
+ * Recusa se alguma parte também foi desmembrada; o 23503 do `on delete
+ * restrict` (parte de parte criada entre a tela e o toque) vira o mesmo
+ * recado.
+ */
+export async function desfazerDesmembramento(
+  maeId: string,
+): Promise<{ erro?: string }> {
+  const { supabase } = await exigirSessao();
+
+  const partes = await listarPartes(maeId);
+
+  if (partes.length === 0) {
+    return { erro: MENSAGEM_SEM_PARTES };
+  }
+
+  if (await algumaTemFilhas(partes.map((parte) => parte.id))) {
+    return { erro: MENSAGEM_DESFAZER_TRAVADO };
+  }
+
+  const { error } = await supabase
+    .from("pecas_extensao")
+    .delete()
+    .eq("peca_mae_id", maeId);
+
+  if (error) {
+    return {
+      erro: temParte(error)
+        ? MENSAGEM_DESFAZER_TRAVADO
+        : `Não foi possível desfazer: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/produtos");
+  revalidatePath(`/produtos/extensao/${maeId}`);
 
   return {};
 }

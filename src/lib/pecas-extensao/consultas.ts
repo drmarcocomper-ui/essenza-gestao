@@ -175,3 +175,42 @@ export async function listarSugestoes(): Promise<{
     origens: valoresDistintos(linhas.map((linha) => linha.origem)),
   };
 }
+
+/** As partes de uma peça desmembrada — só o primeiro nível. */
+export async function listarPartes(maeId: string): Promise<PecaExtensao[]> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("pecas_extensao")
+    .select(COLUNAS)
+    .eq("peca_mae_id", maeId);
+
+  if (error) {
+    throw new Error(`Não foi possível carregar as partes: ${error.message}`);
+  }
+
+  return ((data ?? []) as LinhaPeca[]).map(paraPeca);
+}
+
+/**
+ * Se alguma destas peças também foi desmembrada. É o que impede o
+ * Desfazer da mãe: apagar a parte deixaria as partes dela sem mãe, e o
+ * `on delete restrict` da 018 recusaria de qualquer jeito.
+ */
+export async function algumaTemFilhas(ids: readonly string[]): Promise<boolean> {
+  if (ids.length === 0) return false;
+
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("pecas_extensao")
+    .select("id")
+    .in("peca_mae_id", [...ids])
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Não foi possível conferir as partes: ${error.message}`);
+  }
+
+  return (data ?? []).length > 0;
+}
