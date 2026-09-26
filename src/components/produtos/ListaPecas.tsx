@@ -6,7 +6,11 @@ import { ChevronRight, Search, X } from "lucide-react";
 
 import { formatarMoeda } from "@/lib/formatters";
 import type { PecaExtensao } from "@/lib/pecas-extensao/consultas";
-import { ordenarPecas, pecaCasaComTermo } from "@/lib/pecas-extensao/regras";
+import {
+  idsDesmembradas,
+  ordenarPecas,
+  pecaCasaComTermo,
+} from "@/lib/pecas-extensao/regras";
 
 /** Campo não informado: nunca 0, que seria outro dado. */
 const VAZIO = "—";
@@ -35,6 +39,7 @@ export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
   const encontradas = ordenarPecas(
     pecas.filter((peca) => pecaCasaComTermo(peca, termo)),
   );
+  const desmembradas = idsDesmembradas(pecas);
   const buscando = termo.trim() !== "";
 
   return (
@@ -78,7 +83,7 @@ export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
               key={peca.id}
               style={nivel > 0 ? { marginLeft: `${nivel * RECUO_POR_NIVEL}rem` } : undefined}
             >
-              <CardPeca peca={peca} />
+              <CardPeca peca={peca} desmembrada={desmembradas.has(peca.id)} />
             </li>
           ))}
         </ul>
@@ -98,14 +103,28 @@ export default function ListaPecas({ pecas }: { pecas: PecaExtensao[] }) {
  * dois preços à direita, com rótulo, porque sem ele não se sabe qual é
  * qual.
  */
-function CardPeca({ peca }: { peca: PecaExtensao }) {
+function CardPeca({
+  peca,
+  desmembrada,
+}: {
+  peca: PecaExtensao;
+  desmembrada: boolean;
+}) {
   return (
     <Link
       href={`/produtos/extensao/${peca.id}`}
       className="flex min-h-16 items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 active:bg-neutral-100"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-neutral-900">{peca.codigo}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate font-medium text-neutral-900">{peca.codigo}</p>
+
+          {desmembrada && (
+            <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+              desmembrada
+            </span>
+          )}
+        </div>
 
         <p className="mt-0.5 truncate text-sm text-neutral-500">
           {peca.cor ?? VAZIO} · {peca.textura ?? VAZIO}

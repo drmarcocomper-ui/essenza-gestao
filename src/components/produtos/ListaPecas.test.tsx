@@ -79,6 +79,24 @@ describe("ListaPecas", () => {
     ).toContain("margin-left");
   });
 
+  it("marca a mãe desmembrada, e só ela, mesmo com as partes fora da busca", () => {
+    render(
+      <ListaPecas
+        pecas={[peca("1254"), peca("parte-x", { pecaMaeId: "1254" }), peca("999")]}
+      />,
+    );
+
+    expect(screen.getAllByText("desmembrada")).toHaveLength(1);
+    expect(screen.getByText("1254").closest("a")).toHaveTextContent("desmembrada");
+
+    fireEvent.change(screen.getByLabelText("Buscar peça pelo código"), {
+      target: { value: "1254" },
+    });
+
+    expect(codigosNaTela()).toEqual(["1254"]);
+    expect(screen.getByText("desmembrada")).toBeInTheDocument();
+  });
+
   it("leva à edição da peça", () => {
     render(<ListaPecas pecas={[peca("1254")]} />);
 

@@ -6,6 +6,7 @@ import {
   compararCodigos,
   conferirCustos,
   encontrarCodigoDuplicado,
+  idsDesmembradas,
   indicesCodigoRepetido,
   mensagemCodigoDuplicado,
   mensagemSomaNaoFecha,
@@ -133,6 +134,19 @@ describe("encontrarCodigoDuplicado", () => {
 describe("mensagemCodigoDuplicado", () => {
   it("nomeia a peça", () => {
     expect(mensagemCodigoDuplicado("1254")).toBe("Já existe a peça 1254.");
+  });
+});
+
+describe("idsDesmembradas", () => {
+  it("são as mães apontadas por alguma peça", () => {
+    expect(
+      idsDesmembradas([
+        peca("1254"),
+        peca("1254-a", "1254"),
+        peca("1254-a1", "1254-a"),
+        peca("999"),
+      ]),
+    ).toEqual(new Set(["1254", "1254-a"]));
   });
 });
 

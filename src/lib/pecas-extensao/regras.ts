@@ -341,6 +341,18 @@ export function ordenarPecas<T extends PecaOrdenavel>(
   return saida;
 }
 
+/**
+ * Ids das peças desmembradas: as que alguma peça da lista aponta como
+ * mãe. Consulta, não coluna (ver 018). Recebe a lista inteira, não a
+ * filtrada pela busca — a mãe continua desmembrada mesmo com as partes
+ * fora da tela.
+ */
+export function idsDesmembradas(pecas: readonly { pecaMaeId: string | null }[]) {
+  return new Set(
+    pecas.flatMap((peca) => (peca.pecaMaeId ? [peca.pecaMaeId] : [])),
+  );
+}
+
 /** Busca pelo código, com a mesma normalização do resto do app. */
 export function pecaCasaComTermo(peca: { codigo: string }, termo: string) {
   const alvo = normalizar(termo);
