@@ -150,7 +150,11 @@ function Campo({
   const idErro = `${id}-erro`;
   const idAjuda = `${id}-ajuda`;
 
-  const descritores = [ajuda && idAjuda, erro && idErro]
+  // Com erro, a dica sai: o erro do preço repete o texto dela, e as
+  // duas juntas diziam a mesma frase em cinza e em vermelho.
+  const mostrarAjuda = ajuda && !erro;
+
+  const descritores = [mostrarAjuda && idAjuda, erro && idErro]
     .filter(Boolean)
     .join(" ");
 
@@ -188,7 +192,7 @@ function Campo({
         {children(props)}
       </div>
 
-      {ajuda && (
+      {mostrarAjuda && (
         <p id={idAjuda} className="mt-1 text-xs text-neutral-500">
           {ajuda}
         </p>
