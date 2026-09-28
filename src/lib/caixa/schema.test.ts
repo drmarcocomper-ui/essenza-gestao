@@ -216,6 +216,30 @@ describe("lancamentoSchema", () => {
   });
 });
 
+describe("titularidade no Caixa", () => {
+  const titularidade = (instituicao: string, enviada: string) =>
+    analisar({ ...entrada, instituicao, titularidade: enviada }).data
+      ?.titularidade;
+
+  it("PicPay grava PF, qualquer que seja a titularidade enviada", () => {
+    expect(titularidade("PicPay", "PJ")).toBe("PF");
+    expect(titularidade("PicPay", "Terceiro")).toBe("PF");
+    expect(titularidade("PicPay", "")).toBe("PF");
+  });
+
+  it("reconhece o PicPay digitado com outra caixa ou espaços", () => {
+    expect(titularidade(" picpay ", "PJ")).toBe("PF");
+    expect(titularidade("PICPAY", "")).toBe("PF");
+  });
+
+  it("Nubank e SumUp seguem guardando o que ela escolheu, como antes", () => {
+    expect(titularidade("Nubank", "PJ")).toBe("PJ");
+    expect(titularidade("Nubank", "")).toBeNull();
+    expect(titularidade("SumUp", "PF")).toBe("PF");
+    expect(titularidade("SumUp", "PJ")).toBe("PJ");
+  });
+});
+
 describe("confirmacaoRecebimentoSchema", () => {
   const ID = CLIENTE;
 

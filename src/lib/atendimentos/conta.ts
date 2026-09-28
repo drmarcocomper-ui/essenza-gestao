@@ -3,6 +3,7 @@ import { z } from "zod";
 import { dataCaixaNoFuturo, MENSAGEM_DATA_FUTURA } from "@/lib/caixa/schema";
 import { moedaParaNumero } from "@/lib/formatters";
 import { CATEGORIAS, type CategoriaServico } from "@/lib/servicos/schema";
+import { exigeTitularidade, titularidadeDe } from "@/lib/titularidade";
 
 /**
  * A conta do atendimento: o que foi feito, quanto custou e por onde o
@@ -35,49 +36,14 @@ export const INSTITUICOES = [
 
 export type Instituicao = (typeof INSTITUICOES)[number];
 
-/**
- * As duas que ela escolhe na tela. A coluna `titularidade` aceita um
- * terceiro valor, "Terceiro" (002), que não é opção aqui: aquilo é o
- * titular da conta no histórico da planilha, não quem pagou.
- */
-export const TITULARIDADES_CONTA = ["PF", "PJ"] as const;
-
-export type TitularidadeConta = (typeof TITULARIDADES_CONTA)[number];
-
-/**
- * Instituições onde a mesma marca tem as duas contas, a dela e a do
- * CNPJ. Sem a resposta, o lançamento não diz de qual conta é o dinheiro.
- */
-const COM_DUAS_CONTAS: readonly string[] = ["Nubank", "PicPay"];
-
-/** SumUp é a maquininha do CNPJ: titularidade conhecida, não perguntada. */
-const TITULARIDADE_FIXA: Partial<Record<Instituicao, TitularidadeConta>> = {
-  SumUp: "PJ",
-};
-
-/** Se a tela precisa perguntar PF ou PJ. */
-export function exigeTitularidade(instituicao: string) {
-  return COM_DUAS_CONTAS.includes(instituicao);
-}
-
-/**
- * A titularidade que vai para o banco.
- *
- * Onde a tela não pergunta, grava null em vez de chutar: Dinheiro,
- * Terceiro e Cortesia não passam por conta bancária nenhuma.
- */
-export function titularidadeDe(
-  instituicao: string,
-  escolhida: string | null,
-): TitularidadeConta | null {
-  const fixa = TITULARIDADE_FIXA[instituicao as Instituicao];
-
-  if (fixa) return fixa;
-
-  if (!exigeTitularidade(instituicao)) return null;
-
-  return escolhida === "PF" || escolhida === "PJ" ? escolhida : null;
-}
+// A regra de titularidade (SumUp → PJ, PicPay → PF, Nubank pergunta)
+// mora em `@/lib/titularidade`, que o Caixa também usa.
+export {
+  exigeTitularidade,
+  TITULARIDADES_CONTA,
+  titularidadeDe,
+  type TitularidadeConta,
+} from "@/lib/titularidade";
 
 /**
  * Instituição para `lancamentos.forma_pagamento`, quando a instituição

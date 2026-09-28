@@ -9,10 +9,11 @@ import {
   MENSAGEM_REABRA_A_CONTA,
 } from "@/lib/caixa/travas";
 
-const { obterLancamento, update, remover, filtros, redirect, apagadas } =
+const { obterLancamento, update, inserir, remover, filtros, redirect, apagadas } =
   vi.hoisted(() => ({
     obterLancamento: vi.fn(),
     update: vi.fn(),
+    inserir: vi.fn(),
     remover: vi.fn(),
     /** Cada filtro encadeado no delete, na ordem: ["eq", "id", ID]… */
     filtros: [] as unknown[][],
@@ -29,6 +30,10 @@ vi.mock("@/lib/auth", () => ({
   exigirSessao: async () => ({
     supabase: {
       from: () => ({
+        insert: async (dados: unknown) => {
+          inserir(dados);
+          return { error: null };
+        },
         update: (dados: unknown) => {
           update(dados);
           return { eq: async () => ({ error: null }) };
@@ -55,7 +60,11 @@ vi.mock("@/lib/auth", () => ({
   }),
 }));
 
-import { atualizarLancamento, excluirLancamento } from "./actions";
+import {
+  atualizarLancamento,
+  criarLancamento,
+  excluirLancamento,
+} from "./actions";
 
 const ID = "33333333-3333-4333-8333-333333333333";
 const CLIENTE = "44444444-4444-4444-8444-444444444444";
@@ -114,6 +123,7 @@ function formulario(mudancas: Record<string, string> = {}) {
 beforeEach(() => {
   obterLancamento.mockReset();
   update.mockReset();
+  inserir.mockReset();
   remover.mockReset();
   redirect.mockReset();
   filtros.length = 0;
@@ -261,6 +271,85 @@ describe("editar lançamento manual: nada muda", () => {
       lancamentoSchema.parse(lerFormulario(formulario(mudancas))),
     );
     expect(redirect).toHaveBeenCalledWith("/caixa?mes=2026-10");
+  });
+});
+
+describe("titularidade do PicPay", () => {
+  it("lançar com PicPay e PJ enviado grava PF", async () => {
+    await criarLancamento(
+      {},
+      formulario({ instituicao: "PicPay", titularidade: "PJ", parcelamento: "" }),
+    );
+
+    expect(inserir).toHaveBeenCalledWith(
+      expect.objectContaining({ instituicao: "PicPay", titularidade: "PF" }),
+    );
+  });
+
+  it("lançar com PicPay sem titularidade grava PF", async () => {
+    await criarLancamento(
+      {},
+      formulario({ instituicao: "PicPay", titularidade: "", parcelamento: "" }),
+    );
+
+    expect(inserir).toHaveBeenCalledWith(
+      expect.objectContaining({ titularidade: "PF" }),
+    );
+  });
+
+  it("editar um PicPay antigo gravado como PJ grava PF", async () => {
+    obterLancamento.mockResolvedValue({
+      ...linha(null),
+      instituicao: "PicPay",
+      titularidade: "PJ",
+    });
+
+    // O formulário não manda titularidade: o campo some com PicPay.
+    await atualizarLancamento(
+      ID,
+      {},
+      formulario({ instituicao: "PicPay", titularidade: "" }),
+    );
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ instituicao: "PicPay", titularidade: "PF" }),
+    );
+  });
+
+  it("editar um PicPay antigo de conta grava PF, sem esbarrar na trava", async () => {
+    obterLancamento.mockResolvedValue({
+      ...linha(ATENDIMENTO),
+      instituicao: "PicPay",
+      titularidade: "PJ",
+    });
+
+    await atualizarLancamento(
+      ID,
+      {},
+      formulario({ instituicao: "PicPay", titularidade: "PJ" }),
+    );
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ titularidade: "PF" }),
+    );
+    expect(redirect).toHaveBeenCalledWith("/caixa?mes=2026-09");
+  });
+
+  it("SumUp e Nubank seguem gravando o que veio do formulário", async () => {
+    await criarLancamento({}, formulario({ parcelamento: "" }));
+    await criarLancamento(
+      {},
+      formulario({ instituicao: "Nubank", titularidade: "PJ", parcelamento: "" }),
+    );
+
+    expect(inserir.mock.calls[0][0]).toMatchObject({
+      instituicao: "SumUp",
+      titularidade: "PJ",
+    });
+    expect(inserir.mock.calls[1][0]).toMatchObject({
+      instituicao: "Nubank",
+      titularidade: "PJ",
+    });
   });
 });
 

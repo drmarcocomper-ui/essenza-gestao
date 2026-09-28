@@ -88,11 +88,10 @@ describe("diferença entre formas e total", () => {
 });
 
 describe("titularidade", () => {
-  it("é perguntada só onde a marca tem as duas contas", () => {
+  it("é perguntada só no Nubank", () => {
     expect(exigeTitularidade("Nubank")).toBe(true);
-    expect(exigeTitularidade("PicPay")).toBe(true);
 
-    for (const outra of ["SumUp", "Dinheiro", "Terceiro", "Cortesia"]) {
+    for (const outra of ["SumUp", "PicPay", "Dinheiro", "Terceiro", "Cortesia"]) {
       expect(exigeTitularidade(outra)).toBe(false);
     }
   });
@@ -102,9 +101,40 @@ describe("titularidade", () => {
     expect(titularidadeDe("SumUp", "PF")).toBe("PJ");
   });
 
-  it("guarda a escolha no Nubank e no PicPay", () => {
+  it("PicPay grava PF sem perguntar, e ignora o que vier da tela", () => {
+    expect(titularidadeDe("PicPay", null)).toBe("PF");
+    expect(titularidadeDe("PicPay", "PJ")).toBe("PF");
+  });
+
+  it("guarda a escolha no Nubank", () => {
     expect(titularidadeDe("Nubank", "PF")).toBe("PF");
-    expect(titularidadeDe("PicPay", "PJ")).toBe("PJ");
+    expect(titularidadeDe("Nubank", "PJ")).toBe("PJ");
+  });
+
+  it("PicPay passa sem titularidade e grava PF, mesmo com PJ enviado", () => {
+    for (const enviada of ["", "PJ"]) {
+      const forma = formaContaSchema.parse({
+        instituicao: "PicPay",
+        titularidade: enviada,
+        modalidade: "",
+        parcelas: "1",
+        valor: "480,00",
+      });
+
+      expect(forma.titularidade).toBe("PF");
+    }
+  });
+
+  it("SumUp segue gravando PJ no fechamento", () => {
+    const forma = formaContaSchema.parse({
+      instituicao: "SumUp",
+      titularidade: "PF",
+      modalidade: "debito",
+      parcelas: "1",
+      valor: "480,00",
+    });
+
+    expect(forma.titularidade).toBe("PJ");
   });
 
   it("grava null onde a tela não pergunta, em vez de chutar", () => {

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { hoje } from "@/lib/caixa/mes";
 import { moedaParaNumero } from "@/lib/formatters";
+import { titularidadeFixaNoCaixa } from "@/lib/titularidade";
 
 /**
  * Listas espelhadas dos `check` da migration 002. Mudou lá, muda aqui —
@@ -188,6 +189,9 @@ export const lancamentoSchema = z
     fornecedor: dados.tipo === "Saída" ? dados.fornecedor : null,
     // Pendente não tem data de caixa: o dinheiro ainda não andou.
     data_caixa: dados.status === "Pago" ? dados.data_caixa : null,
+    // PicPay é sempre PF: o que veio do formulário não conta, nem num
+    // lançamento antigo gravado com outra titularidade.
+    titularidade: titularidadeFixaNoCaixa(dados.instituicao) ?? dados.titularidade,
     // Mesma coluna que a planilha preenchia, mantida para os relatórios
     // por mês continuarem batendo com o histórico importado.
     mes_competencia: dados.data_competencia.slice(0, 7),
