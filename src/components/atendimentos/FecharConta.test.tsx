@@ -229,3 +229,33 @@ describe("FecharConta — lista do catálogo", () => {
     expect(escondidos(container, "item_tipo")).toEqual(["produto"]);
   });
 });
+
+describe("FecharConta — titularidade", () => {
+  function escolher(instituicao: string) {
+    montar([]);
+    fireEvent.click(screen.getByRole("button", { name: "Forma de pagamento" }));
+    fireEvent.change(screen.getByLabelText("Forma de pagamento"), {
+      target: { value: instituicao },
+    });
+  }
+
+  it("PicPay não pergunta PF ou PJ, como a SumUp", () => {
+    escolher("PicPay");
+
+    expect(screen.queryByRole("group", { name: /Titularidade/ })).toBeNull();
+  });
+
+  it("SumUp continua sem perguntar", () => {
+    escolher("SumUp");
+
+    expect(screen.queryByRole("group", { name: /Titularidade/ })).toBeNull();
+  });
+
+  it("Nubank continua perguntando", () => {
+    escolher("Nubank");
+
+    const grupo = screen.getByRole("group", { name: "Titularidade do Nubank" });
+    expect(within(grupo).getByRole("button", { name: "PF" })).toBeInTheDocument();
+    expect(within(grupo).getByRole("button", { name: "PJ" })).toBeInTheDocument();
+  });
+});

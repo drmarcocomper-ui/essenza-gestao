@@ -23,6 +23,7 @@ import {
   MENSAGEM_COMPETENCIA_TRAVADA,
 } from "@/lib/caixa/travas";
 import { valorParaCampo } from "@/lib/formatters";
+import { titularidadeFixaNoCaixa } from "@/lib/titularidade";
 
 type Props = {
   acao: (
@@ -77,8 +78,15 @@ export default function FormularioLancamento({
     lancamento ? (lancamento.data_caixa ?? "") : hoje(),
   );
 
+  const [instituicao, setInstituicao] = useState(
+    estado.valores?.instituicao ?? lancamento?.instituicao ?? "",
+  );
+
   const entrada = tipo === "Entrada";
   const pago = status === "Pago";
+  // PicPay é sempre PF: o campo some, como a SumUp no fechamento da
+  // conta. A action grava PF de qualquer jeito.
+  const titularidadeFixa = titularidadeFixaNoCaixa(instituicao) !== null;
   // Entrada de conta: valor, tipo, competência, parcela e cliente são
   // da conta, e só mudam reabrindo-a. A action confere de novo.
   const daConta = lancamento ? lancamentoDaConta(lancamento) : false;
@@ -304,7 +312,8 @@ export default function FormularioLancamento({
                 {...props}
                 name="instituicao"
                 type="text"
-                defaultValue={valor("instituicao")}
+                value={instituicao}
+                onChange={(evento) => setInstituicao(evento.target.value)}
                 list={idInstituicoes}
                 placeholder="Nubank, SumUp…"
                 autoCapitalize="words"
@@ -320,22 +329,24 @@ export default function FormularioLancamento({
           )}
         </Campo>
 
-        <Campo rotulo="Titularidade" erro={estado.erros?.titularidade}>
-          {(props) => (
-            <select
-              {...props}
-              name="titularidade"
-              defaultValue={valor("titularidade")}
-            >
-              <option value="">Não informada</option>
-              {TITULARIDADES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          )}
-        </Campo>
+        {!titularidadeFixa && (
+          <Campo rotulo="Titularidade" erro={estado.erros?.titularidade}>
+            {(props) => (
+              <select
+                {...props}
+                name="titularidade"
+                defaultValue={valor("titularidade")}
+              >
+                <option value="">Não informada</option>
+                {TITULARIDADES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Campo>
+        )}
 
         <Campo
           rotulo="Parcelamento"

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Lancamento } from "@/lib/caixa/consultas";
@@ -96,5 +96,37 @@ describe("FormularioLancamento: lançamento manual", () => {
     expect(screen.getByLabelText("Parcelamento")).toBeEnabled();
     expect(screen.getByText("Cortesia? Deixe 0,00.")).toBeInTheDocument();
     expect(screen.queryByText(MENSAGEM_CAMPO_TRAVADO_CONTA)).toBeNull();
+  });
+});
+
+describe("FormularioLancamento: titularidade do PicPay", () => {
+  it("PicPay antigo abre sem o campo de titularidade", () => {
+    const { container } = abrir({
+      ...linha(null),
+      instituicao: "PicPay",
+      titularidade: "PJ",
+    });
+
+    expect(screen.queryByLabelText("Titularidade")).toBeNull();
+    // Nada de PJ no POST: a action grava PF.
+    expect(new FormData(container.querySelector("form")!).get("titularidade")).toBeNull();
+  });
+
+  it("digitar PicPay esconde o campo, trocar de volta mostra", () => {
+    abrir(linha(null));
+
+    const instituicao = screen.getByLabelText("Instituição");
+
+    fireEvent.change(instituicao, { target: { value: "picpay " } });
+    expect(screen.queryByLabelText("Titularidade")).toBeNull();
+
+    fireEvent.change(instituicao, { target: { value: "Nubank" } });
+    expect(screen.getByLabelText("Titularidade")).toBeEnabled();
+  });
+
+  it("SumUp segue com o campo, como antes", () => {
+    abrir(linha(null));
+
+    expect(screen.getByLabelText("Titularidade")).toHaveValue("PJ");
   });
 });
