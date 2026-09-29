@@ -259,3 +259,47 @@ describe("FecharConta — titularidade", () => {
     expect(within(grupo).getByRole("button", { name: "PJ" })).toBeInTheDocument();
   });
 });
+
+describe("FecharConta — titularidade com conta montada", () => {
+  const ITEM: LinhaItem = {
+    tipo: "servico",
+    refId: "s1",
+    nome: "Corte",
+    quantidade: 1,
+    valor: "100,00",
+  };
+
+  function escolher(instituicao: string) {
+    const tela = montar([], [ITEM]);
+    fireEvent.click(screen.getByRole("button", { name: "Forma de pagamento" }));
+    fireEvent.change(screen.getByLabelText("Forma de pagamento"), {
+      target: { value: instituicao },
+    });
+    return tela;
+  }
+
+  it("Nubank pergunta PF/PJ e a escolha vai no POST", () => {
+    const { container } = escolher("Nubank");
+
+    const grupo = screen.getByRole("group", { name: "Titularidade do Nubank" });
+    fireEvent.click(within(grupo).getByRole("button", { name: "PJ" }));
+
+    expect(within(grupo).getByRole("button", { name: "PJ" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(escondidos(container, "forma_titularidade")).toEqual(["PJ"]);
+  });
+
+  it("Nubank sem PF/PJ não deixa fechar", () => {
+    escolher("Nubank");
+
+    expect(screen.getByText("Diga se o Nubank é PF ou PJ.")).toBeInTheDocument();
+  });
+
+  it("PicPay não pergunta", () => {
+    escolher("PicPay");
+
+    expect(screen.queryByRole("group", { name: /Titularidade/ })).toBeNull();
+  });
+});

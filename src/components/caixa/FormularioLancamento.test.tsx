@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Lancamento } from "@/lib/caixa/consultas";
@@ -126,6 +126,60 @@ describe("FormularioLancamento: titularidade do PicPay", () => {
 
   it("SumUp segue com o campo, como antes", () => {
     abrir(linha(null));
+
+    expect(screen.getByLabelText("Titularidade")).toHaveValue("PJ");
+  });
+});
+
+describe("FormularioLancamento: titularidade do Nubank", () => {
+  function novo() {
+    return render(
+      <FormularioLancamento
+        acao={async () => ({})}
+        tipoInicial="Entrada"
+        categorias={[{ id: "1", tipo: "Entrada", nome: "Coloração" }]}
+        instituicoes={["Nubank", "PicPay", "SumUp"]}
+        rotuloEnviar="Lançar"
+        cancelarHref="/caixa"
+      />,
+    );
+  }
+
+  it("novo: escolher Nubank mostra o campo PF/PJ", () => {
+    novo();
+
+    fireEvent.change(screen.getByLabelText("Instituição"), {
+      target: { value: "Nubank" },
+    });
+
+    const campo = screen.getByLabelText("Titularidade");
+    expect(campo).toBeEnabled();
+    expect(within(campo).getByRole("option", { name: "PF" })).toBeInTheDocument();
+    expect(within(campo).getByRole("option", { name: "PJ" })).toBeInTheDocument();
+  });
+
+  it("novo: escolher PicPay esconde o campo", () => {
+    novo();
+
+    fireEvent.change(screen.getByLabelText("Instituição"), {
+      target: { value: "PicPay" },
+    });
+
+    expect(screen.queryByLabelText("Titularidade")).toBeNull();
+  });
+
+  it("editar: Nubank PJ abre com o campo e PJ marcado", () => {
+    abrir({ ...linha(null), instituicao: "Nubank", titularidade: "PJ" });
+
+    expect(screen.getByLabelText("Titularidade")).toHaveValue("PJ");
+  });
+
+  it("editar: Nubank PJ de conta de atendimento abre com PJ marcado", () => {
+    abrir({
+      ...linha("55555555-5555-4555-8555-555555555555"),
+      instituicao: "Nubank",
+      titularidade: "PJ",
+    });
 
     expect(screen.getByLabelText("Titularidade")).toHaveValue("PJ");
   });
