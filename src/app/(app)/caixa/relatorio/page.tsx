@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import NavegacaoMes from "@/components/caixa/NavegacaoMes";
 import { formatarCentavos } from "@/lib/atendimentos/conta";
@@ -16,7 +16,7 @@ import {
   montarResumo,
   type Grupo,
 } from "@/lib/relatorio/resumo";
-import { linkRelatorio } from "@/lib/relatorio/url";
+import { linkCsvRelatorio, linkRelatorio } from "@/lib/relatorio/url";
 
 export const metadata: Metadata = {
   title: "Relatório do mês — Essenza",
@@ -54,6 +54,16 @@ export default async function RelatorioPage({
       </div>
 
       <NavegacaoMes mes={mes} linkDoMes={linkRelatorio} />
+
+      {/* <a>, não <Link>: é download de arquivo, não navegação. */}
+      <a
+        href={linkCsvRelatorio(mes)}
+        download
+        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
+      >
+        <Download aria-hidden="true" className="size-5" />
+        Baixar CSV do mês
+      </a>
 
       <Bloco titulo="Entradas recebidas">
         <Linha rotulo="PJ SumUp" grupo={resumo.entradas["PJ SumUp"]} />
