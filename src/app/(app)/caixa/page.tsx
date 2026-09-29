@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChevronRight,
+  FileText,
+} from "lucide-react";
 
 import ChaveVisao from "@/components/caixa/ChaveVisao";
 import FiltrosCaixa from "@/components/caixa/FiltrosCaixa";
@@ -19,6 +24,7 @@ import {
   statusDoSlug,
   tipoDoSlug,
 } from "@/lib/caixa/url";
+import { linkRelatorio } from "@/lib/relatorio/url";
 
 export const metadata: Metadata = {
   title: "Caixa — Essenza",
@@ -55,6 +61,18 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
       ) : (
         <ResumoMes resumo={resumo} pendentes={pendentes} />
       )}
+
+      {/* O relatório é sempre pela visão Caixa, no mês que está aberto. */}
+      <Link
+        href={linkRelatorio(filtros.mes)}
+        className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 active:bg-neutral-100"
+      >
+        <span className="flex items-center gap-2">
+          <FileText aria-hidden="true" className="size-5 text-neutral-500" />
+          Relatório do mês
+        </span>
+        <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-neutral-400" />
+      </Link>
 
       <FiltrosCaixa filtros={filtros} />
 
