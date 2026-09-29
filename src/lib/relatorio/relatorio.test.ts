@@ -135,7 +135,13 @@ describe("classificarSaida", () => {
     ["Luz", "Luz"],
     ["DAS", "DAS MEI"],
     ["DAS MEI 09/2026", "DAS MEI"],
+    ["DAS MEI - imposto", "DAS MEI"],
+    ["Boleto DAS MEI", "DAS MEI"],
+    ["imposto", "DAS MEI"],
     ["Imposto", "DAS MEI"],
+    ["Simples Nacional", "DAS MEI"],
+    ["boleto das tintas", "Boletos de produtos"],
+    ["compra das escovas", "Outras"],
     ["INSS", "INSS"],
     ["Boleto WELLA", "Boletos de produtos"],
     ["L'Oréal", "Boletos de produtos"],
@@ -149,7 +155,7 @@ describe("classificarSaida", () => {
     );
   });
 
-  it("'luz' e 'das' só como palavra inteira", () => {
+  it("'luz' só como palavra inteira; 'das' dentro de palavra não conta", () => {
     expect(classificarSaida({ categoria: "Custo Variável", descricao: "Luzia" })).toBe(
       "Outras",
     );

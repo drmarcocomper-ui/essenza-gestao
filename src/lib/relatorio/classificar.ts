@@ -157,7 +157,7 @@ export const GRUPOS_FIXOS: readonly GrupoDespesa[] = [
   "INSS",
 ];
 
-/** A palavra inteira, não pedaço de outra: "das" não casa "vendas". */
+/** A palavra inteira, não pedaço de outra: "luz" não casa "Luzia". */
 function temPalavra(texto: string, palavra: string) {
   return new RegExp(`(^|[^a-z0-9])${palavra}([^a-z0-9]|$)`).test(texto);
 }
@@ -187,7 +187,15 @@ export function classificarSaida(
   ) {
     return "Luz";
   }
-  if (temPalavra(texto, "das") || texto === "imposto") return "DAS MEI";
+  // "das" solto é preposição ("boleto das tintas"): só conta sozinho.
+  if (
+    texto.includes("das mei") ||
+    texto.includes("simples nacional") ||
+    texto === "das" ||
+    texto === "imposto"
+  ) {
+    return "DAS MEI";
+  }
   if (texto.includes("inss")) return "INSS";
   if (PRODUTOS.some((palavra) => texto.includes(palavra))) {
     return "Boletos de produtos";
