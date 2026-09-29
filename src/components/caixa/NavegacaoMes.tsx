@@ -2,33 +2,33 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { deslocarMes, rotuloMes } from "@/lib/caixa/mes";
-import { linkCaixa, type FiltrosCaixa } from "@/lib/caixa/url";
 
 /**
  * Mês anterior e próximo, sem JavaScript: são links que trocam o `mes`
- * da URL e preservam os filtros.
+ * da URL. Quem usa diz como montar o link — o Caixa preserva os
+ * filtros, o relatório só troca o mês.
  */
-export default function NavegacaoMes({ filtros }: { filtros: FiltrosCaixa }) {
+export default function NavegacaoMes({
+  mes,
+  linkDoMes,
+}: {
+  mes: string;
+  linkDoMes: (mes: string) => string;
+}) {
   return (
     <nav
       aria-label="Navegação de mês"
       className="flex items-center justify-between gap-2"
     >
-      <Seta
-        href={linkCaixa({ ...filtros, mes: deslocarMes(filtros.mes, -1) })}
-        rotulo="Mês anterior"
-      >
+      <Seta href={linkDoMes(deslocarMes(mes, -1))} rotulo="Mês anterior">
         <ChevronLeft aria-hidden="true" className="size-6" />
       </Seta>
 
       <h2 aria-live="polite" className="font-semibold text-neutral-900">
-        {rotuloMes(filtros.mes)}
+        {rotuloMes(mes)}
       </h2>
 
-      <Seta
-        href={linkCaixa({ ...filtros, mes: deslocarMes(filtros.mes, 1) })}
-        rotulo="Próximo mês"
-      >
+      <Seta href={linkDoMes(deslocarMes(mes, 1))} rotulo="Próximo mês">
         <ChevronRight aria-hidden="true" className="size-6" />
       </Seta>
     </nav>

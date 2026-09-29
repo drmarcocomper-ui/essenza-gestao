@@ -8,6 +8,7 @@ import {
   type ResumoCaixa,
   type VisaoCaixa,
 } from "@/lib/caixa/visao";
+import type { LancamentoRelatorio } from "@/lib/relatorio/classificar";
 
 /**
  * Teto da varredura usada para sugerir instituições já digitadas.
@@ -202,6 +203,32 @@ export async function obterResumoCaixa(mes: string): Promise<ResumoCaixa> {
       valor: number;
     }[],
   );
+}
+
+/**
+ * Lançamentos do mês para o relatório da contadora: o mesmo mês da
+ * visão Caixa (`filtroMesCaixa`), com as colunas que dizem de qual
+ * conta é o dinheiro. A lista do Caixa não traz instituição nem
+ * titularidade, por isso a consulta é outra — o filtro é o mesmo.
+ */
+export async function listarRelatorioMes(
+  mes: string,
+): Promise<LancamentoRelatorio[]> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select(
+      "id, tipo, status, data_competencia, data_caixa, data_prevista, categoria, descricao, instituicao, titularidade, forma_pagamento, parcelamento, valor, cliente:clientes(nome)",
+    )
+    .or(filtroMesCaixa(mes))
+    .order("criado_em", { ascending: true });
+
+  if (error) {
+    throw new Error(`Não foi possível carregar o relatório: ${error.message}`);
+  }
+
+  return (data ?? []) as unknown as LancamentoRelatorio[];
 }
 
 /**

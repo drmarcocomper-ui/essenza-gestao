@@ -13,7 +13,12 @@ import {
   obterResumoCaixa,
   obterResumoMes,
 } from "@/lib/caixa/consultas";
-import { lerFiltros, statusDoSlug, tipoDoSlug } from "@/lib/caixa/url";
+import {
+  lerFiltros,
+  linkCaixa,
+  statusDoSlug,
+  tipoDoSlug,
+} from "@/lib/caixa/url";
 
 export const metadata: Metadata = {
   title: "Caixa — Essenza",
@@ -40,7 +45,10 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
     <div className="space-y-4 pb-16">
       <ChaveVisao filtros={filtros} />
 
-      <NavegacaoMes filtros={filtros} />
+      <NavegacaoMes
+        mes={filtros.mes}
+        linkDoMes={(mes) => linkCaixa({ ...filtros, mes })}
+      />
 
       {"recebido" in resumo ? (
         <ResumoCaixa resumo={resumo} pendentes={pendentes} />
