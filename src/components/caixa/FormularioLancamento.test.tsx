@@ -190,13 +190,13 @@ describe("FormularioLancamento: titularidade do Nubank", () => {
 describe("FormularioLancamento: Cancelar e Voltar levam ao mesmo lugar", () => {
   const MES_DO_LANCAMENTO = "/caixa?mes=2026-09";
 
-  /** A tela de editar como a página monta: Voltar em cima, Cancelar no form. */
+  /** A tela de editar como a página monta: uma saída só, nos dois botões. */
   function editar(origem: string | undefined) {
-    const volta = voltaDaOrigem(origem);
+    const saida = voltaDaOrigem(origem, MES_DO_LANCAMENTO);
 
     render(
       <>
-        <Voltar href={volta.href} rotulo={volta.rotulo} />
+        <Voltar href={saida.href} rotulo={saida.rotulo} />
         <FormularioLancamento
           acao={async () => ({})}
           lancamento={linha(null)}
@@ -204,7 +204,7 @@ describe("FormularioLancamento: Cancelar e Voltar levam ao mesmo lugar", () => {
           categorias={[{ id: "1", tipo: "Entrada", nome: "Coloração" }]}
           instituicoes={[]}
           rotuloEnviar="Salvar"
-          cancelarHref={voltaDaOrigem(origem, MES_DO_LANCAMENTO).href}
+          cancelarHref={saida.href}
         />
       </>,
     );
@@ -216,21 +216,24 @@ describe("FormularioLancamento: Cancelar e Voltar levam ao mesmo lugar", () => {
   }
 
   it.each([
-    ["Caixa em visão Competência", "/caixa?mes=2026-03&visao=competencia"],
-    ["A receber", "/caixa/pendentes?mes=2026-03&visao=competencia"],
-    ["Relatório", "/caixa/relatorio?mes=2026-03"],
-  ])("vindo de %s", (_, origem) => {
+    [
+      "vindo do Caixa em visão Competência",
+      "/caixa?mes=2026-03&visao=competencia",
+      "/caixa?mes=2026-03&visao=competencia",
+    ],
+    [
+      "vindo do A receber",
+      "/caixa/pendentes?mes=2026-03&visao=competencia",
+      "/caixa/pendentes?mes=2026-03&visao=competencia",
+    ],
+    ["vindo do Relatório", "/caixa/relatorio?mes=2026-03", "/caixa/relatorio?mes=2026-03"],
+    // Aberta direto: os dois vão ao mês do lançamento.
+    ["sem origem", undefined, MES_DO_LANCAMENTO],
+  ])("%s", (_, origem, destino) => {
     const { voltar, cancelar } = editar(origem);
 
-    expect(cancelar.getAttribute("href")).toBe(origem);
-    expect(cancelar.getAttribute("href")).toBe(voltar.getAttribute("href"));
-  });
-
-  it("sem origem, o Cancelar da edição volta ao mês do lançamento, como antes", () => {
-    const { voltar, cancelar } = editar(undefined);
-
-    expect(cancelar).toHaveAttribute("href", MES_DO_LANCAMENTO);
-    expect(voltar).toHaveAttribute("href", "/caixa");
+    expect(cancelar).toHaveAttribute("href", destino);
+    expect(voltar).toHaveAttribute("href", destino);
   });
 
   it("sem origem, o Cancelar do novo lançamento vai para /caixa, como antes", () => {

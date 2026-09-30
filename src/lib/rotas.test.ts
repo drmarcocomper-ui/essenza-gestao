@@ -295,9 +295,11 @@ describe("botão Voltar", () => {
 
   const DESTINOS: Record<string, string[]> = {
     // Caixa (com visão e mês), A receber ou Relatório: `voltaDaOrigem`,
-    // testada em lib/caixa/url.test.ts.
+    // testada em lib/caixa/url.test.ts. Sem origem, /caixa.
     "caixa/novo/page.tsx": ["{volta.href}"],
-    "caixa/[id]/editar/page.tsx": ["{volta.href}"],
+    // A mesma saída do Cancelar: sem origem, o mês do lançamento
+    // (FormularioLancamento.test.tsx compara os dois hrefs).
+    "caixa/[id]/editar/page.tsx": ["{saida.href}"],
     "caixa/pendentes/page.tsx": ["{voltaCaixa(busca)}"],
     "caixa/relatorio/page.tsx": [
       '{linkCaixa({ mes, tipo: "todos", status: "todos", visao: "caixa" })}',
