@@ -39,7 +39,8 @@ export default async function NovoLancamentoPage({
         categorias={categorias}
         instituicoes={instituicoes}
         rotuloEnviar="Lançar"
-        cancelarHref="/caixa"
+        // Mesmo destino do Voltar: os dois botões de saída concordam.
+        cancelarHref={volta.href}
       />
     </div>
   );

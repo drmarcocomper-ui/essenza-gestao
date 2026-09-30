@@ -26,7 +26,8 @@ export default async function EditarLancamentoPage({
 }: PageProps<"/caixa/[id]/editar">) {
   const { id } = await params;
   // Caixa (com visão e mês), A receber ou Relatório: de onde veio.
-  const volta = voltaDaOrigem((await searchParams).origem);
+  const { origem } = await searchParams;
+  const volta = voltaDaOrigem(origem);
 
   const lancamento = await obterLancamento(id);
 
@@ -90,7 +91,13 @@ export default async function EditarLancamentoPage({
         categorias={categorias}
         instituicoes={instituicoes}
         rotuloEnviar="Salvar"
-        cancelarHref={`/caixa?mes=${lancamento.data_competencia.slice(0, 7)}`}
+        // Mesma regra do Voltar; sem origem, o mês do lançamento, como antes.
+        cancelarHref={
+          voltaDaOrigem(
+            origem,
+            `/caixa?mes=${lancamento.data_competencia.slice(0, 7)}`,
+          ).href
+        }
       />
 
       {/* Entrada de conta não tem excluir: o aviso do topo diz o caminho. */}

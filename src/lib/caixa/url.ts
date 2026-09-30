@@ -131,9 +131,17 @@ export type Volta = { href: string; rotulo: string };
  * O Voltar de novo e editar lançamento. A `origem` vem da URL e nunca é
  * usada como href: ela só escolhe entre as telas do Caixa que abrem o
  * lançamento, e o link é remontado aqui, com os filtros relidos. Sem
- * origem, ou com qualquer outra coisa, cai no /caixa padrão.
+ * origem, ou com qualquer outra coisa, cai em `semOrigem` — o /caixa
+ * padrão, a não ser que a tela tenha um destino melhor (o Cancelar da
+ * edição volta ao mês do lançamento).
+ *
+ * É a regra única de saída dessas telas: o Voltar e o Cancelar usam
+ * esta função, para os dois botões levarem ao mesmo lugar.
  */
-export function voltaDaOrigem(origem: string | string[] | undefined): Volta {
+export function voltaDaOrigem(
+  origem: string | string[] | undefined,
+  semOrigem = "/caixa",
+): Volta {
   if (typeof origem === "string" && /^\/(?!\/)/.test(origem)) {
     const url = new URL(origem, "http://essenza.invalid");
     const params = Object.fromEntries(url.searchParams);
@@ -148,5 +156,5 @@ export function voltaDaOrigem(origem: string | string[] | undefined): Volta {
     }
   }
 
-  return { href: "/caixa", rotulo: "Caixa" };
+  return { href: semOrigem, rotulo: "Caixa" };
 }

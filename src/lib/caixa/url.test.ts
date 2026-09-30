@@ -173,3 +173,22 @@ describe("Voltar das telas abertas pelo Caixa", () => {
     );
   });
 });
+
+describe("voltaDaOrigem com destino próprio sem origem", () => {
+  it("com origem, o destino próprio não muda nada", () => {
+    const origem = "/caixa?mes=2026-03&visao=competencia";
+
+    expect(voltaDaOrigem(origem, "/caixa?mes=2026-09")).toEqual(
+      voltaDaOrigem(origem),
+    );
+  });
+
+  it("sem origem, ou com origem inválida, usa o destino próprio", () => {
+    expect(voltaDaOrigem(undefined, "/caixa?mes=2026-09").href).toBe(
+      "/caixa?mes=2026-09",
+    );
+    expect(voltaDaOrigem("/clientes", "/caixa?mes=2026-09").href).toBe(
+      "/caixa?mes=2026-09",
+    );
+  });
+});

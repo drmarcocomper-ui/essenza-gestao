@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import Voltar from "@/components/layout/Voltar";
 import type { Lancamento } from "@/lib/caixa/consultas";
 import { MENSAGEM_CAMPO_TRAVADO_CONTA } from "@/lib/caixa/travas";
+import { voltaDaOrigem } from "@/lib/caixa/url";
 
 import FormularioLancamento from "./FormularioLancamento";
 
@@ -182,5 +184,56 @@ describe("FormularioLancamento: titularidade do Nubank", () => {
     });
 
     expect(screen.getByLabelText("Titularidade")).toHaveValue("PJ");
+  });
+});
+
+describe("FormularioLancamento: Cancelar e Voltar levam ao mesmo lugar", () => {
+  const MES_DO_LANCAMENTO = "/caixa?mes=2026-09";
+
+  /** A tela de editar como a página monta: Voltar em cima, Cancelar no form. */
+  function editar(origem: string | undefined) {
+    const volta = voltaDaOrigem(origem);
+
+    render(
+      <>
+        <Voltar href={volta.href} rotulo={volta.rotulo} />
+        <FormularioLancamento
+          acao={async () => ({})}
+          lancamento={linha(null)}
+          tipoInicial="Entrada"
+          categorias={[{ id: "1", tipo: "Entrada", nome: "Coloração" }]}
+          instituicoes={[]}
+          rotuloEnviar="Salvar"
+          cancelarHref={voltaDaOrigem(origem, MES_DO_LANCAMENTO).href}
+        />
+      </>,
+    );
+
+    return {
+      voltar: screen.getByRole("link", { name: /^Voltar para/ }),
+      cancelar: screen.getByRole("link", { name: "Cancelar" }),
+    };
+  }
+
+  it.each([
+    ["Caixa em visão Competência", "/caixa?mes=2026-03&visao=competencia"],
+    ["A receber", "/caixa/pendentes?mes=2026-03&visao=competencia"],
+    ["Relatório", "/caixa/relatorio?mes=2026-03"],
+  ])("vindo de %s", (_, origem) => {
+    const { voltar, cancelar } = editar(origem);
+
+    expect(cancelar.getAttribute("href")).toBe(origem);
+    expect(cancelar.getAttribute("href")).toBe(voltar.getAttribute("href"));
+  });
+
+  it("sem origem, o Cancelar da edição volta ao mês do lançamento, como antes", () => {
+    const { voltar, cancelar } = editar(undefined);
+
+    expect(cancelar).toHaveAttribute("href", MES_DO_LANCAMENTO);
+    expect(voltar).toHaveAttribute("href", "/caixa");
+  });
+
+  it("sem origem, o Cancelar do novo lançamento vai para /caixa, como antes", () => {
+    expect(voltaDaOrigem(undefined).href).toBe("/caixa");
   });
 });
