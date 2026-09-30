@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { criarPeca } from "@/app/(app)/produtos/extensao/actions";
+import Voltar from "@/components/layout/Voltar";
 import FormularioPeca from "@/components/produtos/FormularioPeca";
 import { listarSugestoes } from "@/lib/pecas-extensao/consultas";
 
@@ -13,6 +14,8 @@ export default async function NovaPecaPage() {
 
   return (
     <div className="space-y-4">
+      <Voltar href="/produtos" rotulo="Produtos" />
+
       <h2 className="text-lg font-semibold text-neutral-900">
         Nova peça de extensão
       </h2>

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 import FotosFormula from "@/components/formulas/FotosFormula";
+import Voltar from "@/components/layout/Voltar";
 import { obterCliente } from "@/lib/clientes/consultas";
 import { formatarData } from "@/lib/formatters";
 import { obterFormula } from "@/lib/formulas/consultas";
@@ -39,14 +40,8 @@ export default async function FormulaPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href={`/clientes/${cliente.id}`}
-          aria-label="Voltar para a cliente"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-300 text-neutral-600 active:bg-neutral-100"
-        >
-          <ArrowLeft aria-hidden="true" className="size-5" />
-        </Link>
+      <div className="space-y-4">
+        <Voltar href={`/clientes/${cliente.id}`} rotulo="Cliente" />
 
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold text-neutral-900">

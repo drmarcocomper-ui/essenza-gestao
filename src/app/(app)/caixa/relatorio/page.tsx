@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronRight, Download } from "lucide-react";
 
 import NavegacaoMes from "@/components/caixa/NavegacaoMes";
+import Voltar from "@/components/layout/Voltar";
 import { formatarCentavos } from "@/lib/atendimentos/conta";
 import { listarRelatorioMes } from "@/lib/caixa/consultas";
 import { mesAtual } from "@/lib/caixa/mes";
@@ -39,19 +40,14 @@ export default async function RelatorioPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Link
-          href={linkCaixa({ mes, tipo: "todos", status: "todos", visao: "caixa" })}
-          aria-label="Voltar para o caixa"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white text-neutral-600 active:bg-neutral-100"
-        >
-          <ChevronLeft aria-hidden="true" className="size-6" />
-        </Link>
+      <Voltar
+        href={linkCaixa({ mes, tipo: "todos", status: "todos", visao: "caixa" })}
+        rotulo="Caixa"
+      />
 
-        <h2 className="text-lg font-semibold text-neutral-900">
-          Relatório do mês
-        </h2>
-      </div>
+      <h2 className="text-lg font-semibold text-neutral-900">
+        Relatório do mês
+      </h2>
 
       <NavegacaoMes mes={mes} linkDoMes={linkRelatorio} />
 

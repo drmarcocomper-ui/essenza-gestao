@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { criarAtendimento } from "@/app/(app)/clientes/[id]/atendimentos/actions";
 import FormularioAtendimento from "@/components/atendimentos/FormularioAtendimento";
+import Voltar from "@/components/layout/Voltar";
 import { listarServicos } from "@/lib/atendimentos/consultas";
 import { obterCliente } from "@/lib/clientes/consultas";
 
@@ -26,6 +27,8 @@ export default async function NovoAtendimentoPage({
 
   return (
     <div className="space-y-4">
+      <Voltar href={`/clientes/${cliente.id}`} rotulo="Cliente" />
+
       <div>
         <h2 className="text-lg font-semibold text-neutral-900">
           Novo atendimento

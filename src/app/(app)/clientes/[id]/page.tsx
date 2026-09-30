@@ -14,6 +14,7 @@ import ListaAtendimentos from "@/components/atendimentos/ListaAtendimentos";
 import BotaoAtivo from "@/components/clientes/BotaoAtivo";
 import HistoricoCliente from "@/components/clientes/HistoricoCliente";
 import ListaFormulas from "@/components/formulas/ListaFormulas";
+import Voltar from "@/components/layout/Voltar";
 import { listarAtendimentos } from "@/lib/atendimentos/consultas";
 import { obterCliente, obterHistorico } from "@/lib/clientes/consultas";
 import { resolveClienteDesde } from "@/lib/clientes/desde";
@@ -64,6 +65,8 @@ export default async function ClientePage({
 
   return (
     <div className="space-y-6">
+      <Voltar href="/clientes" rotulo="Clientes" />
+
       <section className="rounded-2xl border border-neutral-200 bg-white p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

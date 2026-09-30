@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { criarLancamento } from "@/app/(app)/caixa/actions";
 import FormularioLancamento from "@/components/caixa/FormularioLancamento";
+import Voltar from "@/components/layout/Voltar";
 import { listarCategorias, listarInstituicoes } from "@/lib/caixa/consultas";
 
 export const metadata: Metadata = {
@@ -24,6 +25,8 @@ export default async function NovoLancamentoPage({
 
   return (
     <div className="space-y-4">
+      <Voltar href="/caixa" rotulo="Caixa" />
+
       <h2 className="text-lg font-semibold text-neutral-900">
         Novo lançamento
       </h2>

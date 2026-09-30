@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { atualizarProduto } from "@/app/(app)/produtos/actions";
+import Voltar from "@/components/layout/Voltar";
 import BotaoAtivoProduto from "@/components/produtos/BotaoAtivoProduto";
 import FormularioProduto from "@/components/produtos/FormularioProduto";
 import { obterProduto } from "@/lib/produtos/consultas";
@@ -24,6 +25,8 @@ export default async function EditarProdutoPage({
 
   return (
     <div className="space-y-4">
+      <Voltar href="/produtos" rotulo="Produtos" />
+
       <div>
         <h2 className="text-lg font-semibold text-neutral-900">
           Editar produto

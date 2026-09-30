@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { criarFormula } from "@/app/(app)/clientes/[id]/formulas/actions";
 import FormularioFormula from "@/components/formulas/FormularioFormula";
+import Voltar from "@/components/layout/Voltar";
 import { obterCliente } from "@/lib/clientes/consultas";
 import { obterFormula } from "@/lib/formulas/consultas";
 import { valoresParaRepetir } from "@/lib/formulas/repetir";
@@ -30,6 +31,7 @@ export default async function NovaFormulaPage({
   }
 
   const repetirId = idNaBusca(repetir);
+  const atendimentoId = idNaBusca(atendimento);
 
   // `obterFormula` já filtra pela cliente da rota: um id de outra pessoa
   // na URL não devolve nada, e o formulário abre em branco.
@@ -37,6 +39,17 @@ export default async function NovaFormulaPage({
 
   return (
     <div className="space-y-4">
+      {/* Aberta do atendimento ("Registrar fórmula"), volta para ele; o id
+          vem da URL, como o que o formulário já usa. */}
+      {atendimentoId ? (
+        <Voltar
+          href={`/clientes/${cliente.id}/atendimentos/${encodeURIComponent(atendimentoId)}`}
+          rotulo="Atendimento"
+        />
+      ) : (
+        <Voltar href={`/clientes/${cliente.id}`} rotulo="Cliente" />
+      )}
+
       <div>
         <h2 className="text-lg font-semibold text-neutral-900">
           {origem ? "Repetir fórmula" : "Nova fórmula"}
@@ -57,7 +70,7 @@ export default async function NovaFormulaPage({
               }
             : null
         }
-        atendimentoId={idNaBusca(atendimento)}
+        atendimentoId={atendimentoId}
         cancelarHref={`/clientes/${cliente.id}`}
       />
     </div>

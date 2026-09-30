@@ -273,3 +273,109 @@ describe("relatório do mês", () => {
     expect(pagina).toContain("href={linkCsvRelatorio(mes)}");
   });
 });
+
+describe("botão Voltar", () => {
+  /**
+   * Toda página que não é raiz de aba tem Voltar, com destino fixo na
+   * página mãe. Instalado como PWA no iPhone, sem ele ela fica presa.
+   *
+   * O href sai do código-fonte do jeito que está escrito: literal ou
+   * template literal vira caminho normalizado (`:dyn`) e é conferido
+   * contra `src/app`; expressão (`{linkCaixa(...)}`) fica como está e o
+   * destino dela é testado junto da função que o monta.
+   */
+  const PAGINAS = path.join(APP, "(app)");
+
+  const RAIZES_DE_ABA = [
+    "hoje/page.tsx",
+    "clientes/page.tsx",
+    "caixa/page.tsx",
+    "produtos/page.tsx",
+  ];
+
+  const DESTINOS: Record<string, string[]> = {
+    "caixa/novo/page.tsx": ["/caixa"],
+    "caixa/[id]/editar/page.tsx": ["/caixa"],
+    "caixa/pendentes/page.tsx": ["/caixa"],
+    "caixa/relatorio/page.tsx": [
+      '{linkCaixa({ mes, tipo: "todos", status: "todos", visao: "caixa" })}',
+    ],
+    "clientes/novo/page.tsx": ["/clientes"],
+    "clientes/[id]/page.tsx": ["/clientes"],
+    "clientes/[id]/editar/page.tsx": ["/clientes/:dyn"],
+    "clientes/[id]/atendimentos/novo/page.tsx": ["/clientes/:dyn"],
+    "clientes/[id]/atendimentos/[atendimentoId]/page.tsx": ["/clientes/:dyn"],
+    "clientes/[id]/formulas/[formulaId]/page.tsx": ["/clientes/:dyn"],
+    // Aberta do atendimento volta para ele; senão, para a cliente.
+    "clientes/[id]/formulas/nova/page.tsx": [
+      "/clientes/:dyn/atendimentos/:dyn",
+      "/clientes/:dyn",
+    ],
+    "produtos/novo/page.tsx": ["/produtos"],
+    "produtos/[id]/editar/page.tsx": ["/produtos"],
+    "produtos/extensao/nova/page.tsx": ["/produtos"],
+    // Parte volta para a mãe; peça inteira, para a lista.
+    "produtos/extensao/[id]/page.tsx": ["/produtos/extensao/:dyn", "/produtos"],
+    "produtos/extensao/[id]/desmembrar/page.tsx": ["/produtos/extensao/:dyn"],
+  };
+
+  function paginas(dir: string, base = ""): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((item) => {
+      const relativo = base ? `${base}/${item.name}` : item.name;
+
+      if (item.isDirectory()) return paginas(path.join(dir, item.name), relativo);
+      return item.name === "page.tsx" ? [relativo] : [];
+    });
+  }
+
+  /** O href de cada `<Voltar>` do arquivo, na ordem em que aparecem. */
+  function destinosDoVoltar(conteudo: string): string[] {
+    const encontrados = conteudo.matchAll(
+      /<Voltar\s+href=(?:"([^"]+)"|\{`([^`]+)`\}|(\{[^\n]*\}))/g,
+    );
+
+    return [...encontrados].map(([, literal, template, expressao]) => {
+      if (expressao) return expressao;
+
+      return (literal ?? template)
+        .split(/[?#]/)[0]
+        .replace(/\$\{[^}]*\}/g, ":dyn");
+    });
+  }
+
+  it("a tabela cobre todas as páginas do app", () => {
+    expect(paginas(PAGINAS).sort()).toEqual(
+      [...RAIZES_DE_ABA, ...Object.keys(DESTINOS)].sort(),
+    );
+  });
+
+  it.each(RAIZES_DE_ABA)("%s é raiz de aba: sem Voltar", (pagina) => {
+    const conteudo = readFileSync(path.join(PAGINAS, pagina), "utf8");
+
+    expect(destinosDoVoltar(conteudo)).toEqual([]);
+  });
+
+  it.each(Object.entries(DESTINOS))("%s volta para %j", (pagina, destinos) => {
+    const conteudo = readFileSync(path.join(PAGINAS, pagina), "utf8");
+
+    expect(destinosDoVoltar(conteudo)).toEqual(destinos);
+
+    for (const destino of destinos) {
+      if (destino.startsWith("{")) continue;
+      expect(rotaExiste(destino)).toBe(true);
+    }
+  });
+
+  it("ninguém volta pelo histórico (router.back, window.history)", () => {
+    const arquivos = [
+      ...arquivosDeCodigo(APP),
+      ...arquivosDeCodigo(path.join(RAIZ, "src/components")),
+    ];
+
+    for (const arquivo of arquivos) {
+      expect(readFileSync(arquivo, "utf8")).not.toMatch(
+        /router\.back\(|window\.history/,
+      );
+    }
+  });
+});

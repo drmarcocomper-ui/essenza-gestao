@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FlaskConical, Lock, Plus } from "lucide-react";
+import { FlaskConical, Lock, Plus } from "lucide-react";
 
 import {
   fecharConta,
@@ -12,6 +12,7 @@ import FecharConta, {
 } from "@/components/atendimentos/FecharConta";
 import ReabrirConta from "@/components/atendimentos/ReabrirConta";
 import ChipParcela from "@/components/caixa/ChipParcela";
+import Voltar from "@/components/layout/Voltar";
 import { emCentavos, totalLinha } from "@/lib/atendimentos/conta";
 import {
   listarProdutosParaConferencia,
@@ -68,14 +69,8 @@ export default async function AtendimentoPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href={`/clientes/${cliente.id}`}
-          aria-label="Voltar para a cliente"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-300 text-neutral-600 active:bg-neutral-100"
-        >
-          <ArrowLeft aria-hidden="true" className="size-5" />
-        </Link>
+      <div className="space-y-4">
+        <Voltar href={`/clientes/${cliente.id}`} rotulo="Cliente" />
 
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold text-neutral-900">

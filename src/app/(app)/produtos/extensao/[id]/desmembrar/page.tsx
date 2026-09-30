@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import Voltar from "@/components/layout/Voltar";
 import FormularioDesmembrar from "@/components/produtos/FormularioDesmembrar";
 import {
   listarSugestoes,
@@ -41,23 +41,16 @@ export default async function DesmembrarPecaPage({
 
   return (
     <div className="space-y-4">
+      <Voltar href={`/produtos/extensao/${mae.id}`} rotulo={`Peça ${mae.codigo}`} />
+
       <h2 className="text-lg font-semibold text-neutral-900">
         Desmembrar peça {mae.codigo}
       </h2>
 
       {motivoNaoDesmembra || mae.precoCompra === null ? (
-        <div className="space-y-4">
-          <p className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
-            {motivoNaoDesmembra}
-          </p>
-
-          <Link
-            href={`/produtos/extensao/${mae.id}`}
-            className="flex h-12 items-center justify-center rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
-          >
-            Voltar para a peça
-          </Link>
-        </div>
+        <p className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+          {motivoNaoDesmembra}
+        </p>
       ) : (
         <FormularioDesmembrar
           mae={mae}

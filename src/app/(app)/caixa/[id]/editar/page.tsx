@@ -6,6 +6,7 @@ import { Lock } from "lucide-react";
 import { atualizarLancamento } from "@/app/(app)/caixa/actions";
 import BotaoExcluir from "@/components/caixa/BotaoExcluir";
 import FormularioLancamento from "@/components/caixa/FormularioLancamento";
+import Voltar from "@/components/layout/Voltar";
 import {
   listarCategorias,
   listarInstituicoes,
@@ -50,6 +51,8 @@ export default async function EditarLancamentoPage({
 
   return (
     <div className="space-y-4">
+      <Voltar href="/caixa" rotulo="Caixa" />
+
       <h2 className="text-lg font-semibold text-neutral-900">
         Editar lançamento
       </h2>

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Scissors } from "lucide-react";
 
 import { atualizarPeca } from "@/app/(app)/produtos/extensao/actions";
+import Voltar from "@/components/layout/Voltar";
 import BotaoDesfazerDesmembramento from "@/components/produtos/BotaoDesfazerDesmembramento";
 import BotaoExcluirPeca from "@/components/produtos/BotaoExcluirPeca";
 import FormularioPeca from "@/components/produtos/FormularioPeca";
@@ -55,6 +56,16 @@ export default async function EditarPecaPage({
 
   return (
     <div className="space-y-4">
+      {/* Parte: volta para a mãe, onde mora o Desfazer. */}
+      {mae ? (
+        <Voltar
+          href={`/produtos/extensao/${mae.id}`}
+          rotulo={`Peça ${mae.codigo}`}
+        />
+      ) : (
+        <Voltar href="/produtos" rotulo="Produtos" />
+      )}
+
       <div>
         <h2 className="text-lg font-semibold text-neutral-900">
           Peça {peca.codigo}
@@ -69,16 +80,6 @@ export default async function EditarPecaPage({
           <div className="mt-1">
             <SeloEstadoPeca temFilhas={temFilhas} conta={null} />
           </div>
-        )}
-
-        {/* Parte: o caminho até o Desfazer, que mora na mãe. */}
-        {mae && (
-          <Link
-            href={`/produtos/extensao/${mae.id}`}
-            className="-ml-2 inline-flex min-h-11 items-center rounded-xl px-2 text-sm text-rose-700 active:bg-rose-50"
-          >
-            Parte da peça {mae.codigo}
-          </Link>
         )}
       </div>
 

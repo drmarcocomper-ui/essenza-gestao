@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { atualizarCliente } from "@/app/(app)/clientes/actions";
 import FormularioCliente from "@/components/clientes/FormularioCliente";
+import Voltar from "@/components/layout/Voltar";
 import { obterCliente } from "@/lib/clientes/consultas";
 
 export const metadata: Metadata = {
@@ -22,6 +23,8 @@ export default async function EditarClientePage({
 
   return (
     <div className="space-y-4">
+      <Voltar href={`/clientes/${cliente.id}`} rotulo="Cliente" />
+
       <h2 className="text-lg font-semibold text-neutral-900">
         Editar cadastro
       </h2>

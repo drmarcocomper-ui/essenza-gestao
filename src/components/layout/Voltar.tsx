@@ -7,7 +7,7 @@ import { ChevronLeft } from "lucide-react";
  * iPhone, o app não tem botão de voltar do navegador nem do sistema: sem
  * isto, a única saída é a BottomNav, que leva à raiz da aba.
  *
- * O destino é FIXO — a página mãe —, nunca `router.back()`: depois de
+ * O destino é FIXO — a página mãe —, nunca o histórico: depois de
  * salvar, o histórico devolveria ao formulário enviado; aberta direto
  * (link, tela inicial), a página não tem histórico e o botão não faria
  * nada.

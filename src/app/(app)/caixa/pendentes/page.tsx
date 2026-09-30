@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 
 import ChipParcela from "@/components/caixa/ChipParcela";
 import ConfirmarRecebimento from "@/components/caixa/ConfirmarRecebimento";
+import Voltar from "@/components/layout/Voltar";
 import { listarPendentes } from "@/lib/caixa/consultas";
 import { formatarData, formatarMoeda } from "@/lib/formatters";
 
@@ -27,17 +27,9 @@ export default async function PendentesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Link
-          href="/caixa"
-          aria-label="Voltar para o caixa"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white text-neutral-600 active:bg-neutral-100"
-        >
-          <ChevronLeft aria-hidden="true" className="size-6" />
-        </Link>
+      <Voltar href="/caixa" rotulo="Caixa" />
 
-        <h2 className="text-lg font-semibold text-neutral-900">A receber</h2>
-      </div>
+      <h2 className="text-lg font-semibold text-neutral-900">A receber</h2>
 
       {pendentes.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 px-4 py-10 text-center text-neutral-600">
