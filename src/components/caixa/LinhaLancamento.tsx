@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { LancamentoLista } from "@/lib/caixa/consultas";
+import { linkEditarLancamento } from "@/lib/caixa/url";
 import {
   dataReferenciaCaixa,
   marcaCaixa,
@@ -24,9 +25,12 @@ import ChipParcela from "./ChipParcela";
 export default function LinhaLancamento({
   lancamento,
   visao = "competencia",
+  origem,
 }: {
   lancamento: LancamentoLista;
   visao?: VisaoCaixa;
+  /** Link da tela da lista, para o Voltar da edição voltar a ela. */
+  origem?: string;
 }) {
   const entrada = lancamento.tipo === "Entrada";
   const pendente = lancamento.status === "Pendente";
@@ -41,7 +45,7 @@ export default function LinhaLancamento({
 
   return (
     <Link
-      href={`/caixa/${lancamento.id}/editar`}
+      href={linkEditarLancamento(lancamento.id, origem)}
       className={`block rounded-2xl border border-l-4 border-neutral-200 bg-white px-4 py-3 active:bg-neutral-50 ${
         entrada ? "border-l-emerald-500" : "border-l-rose-400"
       }`}

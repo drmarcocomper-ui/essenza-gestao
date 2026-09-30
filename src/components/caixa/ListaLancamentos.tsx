@@ -9,11 +9,14 @@ export default function ListaLancamentos({
   lancamentos,
   filtrada,
   visao,
+  origem,
 }: {
   lancamentos: LancamentoLista[];
   /** Com filtro ligado, a lista vazia quer dizer outra coisa. */
   filtrada: boolean;
   visao: VisaoCaixa;
+  /** Link da tela da lista, para o Voltar da edição. */
+  origem: string;
 }) {
   if (lancamentos.length === 0) {
     return (
@@ -32,7 +35,11 @@ export default function ListaLancamentos({
     <ul className="space-y-2">
       {lancamentos.map((lancamento) => (
         <li key={lancamento.id}>
-          <LinhaLancamento lancamento={lancamento} visao={visao} />
+          <LinhaLancamento
+            lancamento={lancamento}
+            visao={visao}
+            origem={origem}
+          />
         </li>
       ))}
     </ul>

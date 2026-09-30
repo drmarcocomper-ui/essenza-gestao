@@ -294,9 +294,11 @@ describe("botão Voltar", () => {
   ];
 
   const DESTINOS: Record<string, string[]> = {
-    "caixa/novo/page.tsx": ["/caixa"],
-    "caixa/[id]/editar/page.tsx": ["/caixa"],
-    "caixa/pendentes/page.tsx": ["/caixa"],
+    // Caixa (com visão e mês), A receber ou Relatório: `voltaDaOrigem`,
+    // testada em lib/caixa/url.test.ts.
+    "caixa/novo/page.tsx": ["{volta.href}"],
+    "caixa/[id]/editar/page.tsx": ["{volta.href}"],
+    "caixa/pendentes/page.tsx": ["{voltaCaixa(busca)}"],
     "caixa/relatorio/page.tsx": [
       '{linkCaixa({ mes, tipo: "todos", status: "todos", visao: "caixa" })}',
     ],
@@ -331,7 +333,9 @@ describe("botão Voltar", () => {
   /** O href de cada `<Voltar>` do arquivo, na ordem em que aparecem. */
   function destinosDoVoltar(conteudo: string): string[] {
     const encontrados = conteudo.matchAll(
-      /<Voltar\s+href=(?:"([^"]+)"|\{`([^`]+)`\}|(\{[^\n]*\}))/g,
+      // Expressão: chaves com até um nível de chaves dentro — cobre
+      // `{linkCaixa({ ... })}` sem engolir o `rotulo={...}` que vem depois.
+      /<Voltar\s+href=(?:"([^"]+)"|\{`([^`]+)`\}|(\{[^{}\n]*(?:\{[^{}\n]*\}[^{}\n]*)*\}))/g,
     );
 
     return [...encontrados].map(([, literal, template, expressao]) => {

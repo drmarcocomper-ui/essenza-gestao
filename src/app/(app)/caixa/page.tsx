@@ -21,6 +21,8 @@ import {
 import {
   lerFiltros,
   linkCaixa,
+  linkNovoLancamento,
+  linkPendentes,
   statusDoSlug,
   tipoDoSlug,
 } from "@/lib/caixa/url";
@@ -46,6 +48,9 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
     contarPendentes(),
   ]);
 
+  // De onde as telas abertas daqui voltam: esta lista, como está.
+  const origem = linkCaixa(filtros);
+
   return (
     // pb-16: a barra de lançar é fixa e não pode cobrir o último item.
     <div className="space-y-4 pb-16">
@@ -57,9 +62,17 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
       />
 
       {"recebido" in resumo ? (
-        <ResumoCaixa resumo={resumo} pendentes={pendentes} />
+        <ResumoCaixa
+          resumo={resumo}
+          pendentes={pendentes}
+          hrefPendentes={linkPendentes(filtros)}
+        />
       ) : (
-        <ResumoMes resumo={resumo} pendentes={pendentes} />
+        <ResumoMes
+          resumo={resumo}
+          pendentes={pendentes}
+          hrefPendentes={linkPendentes(filtros)}
+        />
       )}
 
       {/* O relatório é sempre pela visão Caixa, no mês que está aberto. */}
@@ -80,6 +93,7 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
         lancamentos={lancamentos}
         filtrada={filtros.tipo !== "todos" || filtros.status !== "todos"}
         visao={filtros.visao}
+        origem={origem}
       />
 
       {/* Acima da BottomNav (h-14), na altura do polegar. Entrada primeiro:
@@ -87,7 +101,7 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-neutral-200 bg-neutral-50/95 backdrop-blur">
         <div className="mx-auto flex max-w-screen-sm gap-3 px-4 py-2.5">
           <Link
-            href="/caixa/novo?tipo=entrada"
+            href={linkNovoLancamento("entrada", origem)}
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 font-medium text-white shadow-sm active:bg-emerald-700"
           >
             <ArrowDownLeft aria-hidden="true" className="size-5" />
@@ -95,7 +109,7 @@ export default async function CaixaPage({ searchParams }: PageProps<"/caixa">) {
           </Link>
 
           <Link
-            href="/caixa/novo?tipo=saida"
+            href={linkNovoLancamento("saida", origem)}
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
           >
             <ArrowUpRight aria-hidden="true" className="size-5" />

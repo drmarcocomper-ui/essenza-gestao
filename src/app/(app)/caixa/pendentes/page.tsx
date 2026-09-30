@@ -5,6 +5,12 @@ import ChipParcela from "@/components/caixa/ChipParcela";
 import ConfirmarRecebimento from "@/components/caixa/ConfirmarRecebimento";
 import Voltar from "@/components/layout/Voltar";
 import { listarPendentes } from "@/lib/caixa/consultas";
+import {
+  filtrosNaBusca,
+  linkEditarLancamento,
+  linkPendentes,
+  voltaCaixa,
+} from "@/lib/caixa/url";
 import { formatarData, formatarMoeda } from "@/lib/formatters";
 
 export const metadata: Metadata = {
@@ -20,14 +26,20 @@ export const metadata: Metadata = {
  * dia em que o dinheiro caiu quem informa é ela, ao confirmar, e a
  * confirmação não parte da previsão.
  */
-export default async function PendentesPage() {
+export default async function PendentesPage({
+  searchParams,
+}: PageProps<"/caixa/pendentes">) {
+  const busca = await searchParams;
   const pendentes = await listarPendentes();
+
+  // Esta tela como está, para o Voltar da edição.
+  const origem = linkPendentes(filtrosNaBusca(busca));
 
   const total = pendentes.reduce((soma, item) => soma + item.valor, 0);
 
   return (
     <div className="space-y-4">
-      <Voltar href="/caixa" rotulo="Caixa" />
+      <Voltar href={voltaCaixa(busca)} rotulo="Caixa" />
 
       <h2 className="text-lg font-semibold text-neutral-900">A receber</h2>
 
@@ -59,7 +71,7 @@ export default async function PendentesPage() {
                 {/* O bloco inteiro abre a edição, como na lista do caixa —
                     alvo grande, para usar de pé e com uma mão. */}
                 <Link
-                  href={`/caixa/${pendente.id}/editar`}
+                  href={linkEditarLancamento(pendente.id, origem)}
                   className="block rounded-xl active:bg-neutral-50"
                 >
                   <div className="flex items-baseline justify-between gap-3">

@@ -12,9 +12,12 @@ import { formatarMoeda } from "@/lib/formatters";
 export default function ResumoMes({
   resumo,
   pendentes,
+  hrefPendentes,
 }: {
   resumo: Resumo;
   pendentes: number;
+  /** A receber levando os filtros do Caixa, para o Voltar de lá. */
+  hrefPendentes: string;
 }) {
   const negativo = resumo.resultado < 0;
 
@@ -30,7 +33,7 @@ export default function ResumoMes({
         />
       </dl>
 
-      <LinkPendencias pendentes={pendentes} />
+      <LinkPendencias pendentes={pendentes} href={hrefPendentes} />
     </section>
   );
 }
@@ -43,9 +46,12 @@ export default function ResumoMes({
 export function ResumoCaixa({
   resumo,
   pendentes,
+  hrefPendentes,
 }: {
   resumo: Caixa;
   pendentes: number;
+  /** A receber levando os filtros do Caixa, para o Voltar de lá. */
+  hrefPendentes: string;
 }) {
   return (
     <section className="rounded-2xl border border-neutral-200 bg-white">
@@ -71,7 +77,7 @@ export function ResumoCaixa({
         </Faixa>
       </div>
 
-      <LinkPendencias pendentes={pendentes} />
+      <LinkPendencias pendentes={pendentes} href={hrefPendentes} />
     </section>
   );
 }
@@ -96,12 +102,18 @@ function Faixa({
   );
 }
 
-function LinkPendencias({ pendentes }: { pendentes: number }) {
+function LinkPendencias({
+  pendentes,
+  href,
+}: {
+  pendentes: number;
+  href: string;
+}) {
   if (pendentes <= 0) return null;
 
   return (
     <Link
-      href="/caixa/pendentes"
+      href={href}
       className="flex min-h-12 items-center justify-between gap-2 border-t border-neutral-100 px-4 py-2.5 text-sm font-medium text-amber-800 active:bg-amber-50"
     >
       <span>

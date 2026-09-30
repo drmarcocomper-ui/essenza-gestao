@@ -151,4 +151,22 @@ describe("LinhaLancamento", () => {
       "/caixa/abc/editar",
     );
   });
+
+  it("abre a edição lembrando a lista de origem, com visão e mês", () => {
+    render(
+      <LinhaLancamento
+        lancamento={base}
+        visao="competencia"
+        origem="/caixa?mes=2026-09&visao=competencia"
+      />,
+    );
+
+    const href = screen.getByRole("link").getAttribute("href") ?? "";
+    const url = new URL(href, "http://x");
+
+    expect(url.pathname).toBe("/caixa/abc/editar");
+    expect(url.searchParams.get("origem")).toBe(
+      "/caixa?mes=2026-09&visao=competencia",
+    );
+  });
 });

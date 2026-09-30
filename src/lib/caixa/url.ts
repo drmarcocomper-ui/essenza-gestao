@@ -1,6 +1,7 @@
 import { mesAtual, mesValido } from "@/lib/caixa/mes";
 import type { StatusLancamento, TipoLancamento } from "@/lib/caixa/schema";
 import type { VisaoCaixa } from "@/lib/caixa/visao";
+import { linkRelatorio } from "@/lib/relatorio/url";
 
 /**
  * O estado da lista do caixa mora na URL: mês, tipo, status e visão. Assim o
@@ -66,13 +67,86 @@ export function lerFiltros(params: Bruto): FiltrosCaixa {
   };
 }
 
-/** Link para a lista com estes filtros. Filtro no padrão não vai na URL. */
-export function linkCaixa({ mes, tipo, status, visao }: FiltrosCaixa) {
+/** Os filtros na forma de query. Filtro no padrão não vai na URL. */
+function consulta({ mes, tipo, status, visao }: FiltrosCaixa) {
   const busca = new URLSearchParams({ mes });
 
   if (tipo !== "todos") busca.set("tipo", tipo);
   if (status !== "todos") busca.set("status", status);
   if (visao !== "caixa") busca.set("visao", visao);
 
-  return `/caixa?${busca.toString()}`;
+  return busca.toString();
+}
+
+/** Link para a lista com estes filtros. */
+export function linkCaixa(filtros: FiltrosCaixa) {
+  return `/caixa?${consulta(filtros)}`;
+}
+
+/**
+ * Os filtros do Caixa que vieram na busca de outra tela (A receber), ou
+ * null se não veio nenhum — aberta direto, sem saber de onde.
+ */
+export function filtrosNaBusca(params: Bruto): FiltrosCaixa | null {
+  const algum = ["mes", "tipo", "status", "visao"].some(
+    (chave) => typeof params[chave] === "string",
+  );
+
+  return algum ? lerFiltros(params) : null;
+}
+
+/** O Caixa como estava quando ela saiu dele; sem filtros, o padrão. */
+export function voltaCaixa(params: Bruto) {
+  const filtros = filtrosNaBusca(params);
+
+  return filtros ? linkCaixa(filtros) : "/caixa";
+}
+
+/**
+ * A receber, levando os filtros do Caixa de onde foi aberto: é com eles
+ * que o Voltar de lá devolve a visão e o mês.
+ */
+export function linkPendentes(filtros: FiltrosCaixa | null) {
+  return filtros ? `/caixa/pendentes?${consulta(filtros)}` : "/caixa/pendentes";
+}
+
+/**
+ * Novo lançamento. `origem` é o link da tela de onde ela saiu — vai num
+ * parâmetro só porque `tipo` já é do formulário e colidiria com o filtro.
+ */
+export function linkNovoLancamento(tipo: "entrada" | "saida", origem: string) {
+  return `/caixa/novo?${new URLSearchParams({ tipo, origem })}`;
+}
+
+/** Edição do lançamento, lembrando de onde foi aberta. */
+export function linkEditarLancamento(id: string, origem?: string) {
+  return origem
+    ? `/caixa/${id}/editar?${new URLSearchParams({ origem })}`
+    : `/caixa/${id}/editar`;
+}
+
+export type Volta = { href: string; rotulo: string };
+
+/**
+ * O Voltar de novo e editar lançamento. A `origem` vem da URL e nunca é
+ * usada como href: ela só escolhe entre as telas do Caixa que abrem o
+ * lançamento, e o link é remontado aqui, com os filtros relidos. Sem
+ * origem, ou com qualquer outra coisa, cai no /caixa padrão.
+ */
+export function voltaDaOrigem(origem: string | string[] | undefined): Volta {
+  if (typeof origem === "string" && /^\/(?!\/)/.test(origem)) {
+    const url = new URL(origem, "http://essenza.invalid");
+    const params = Object.fromEntries(url.searchParams);
+
+    switch (url.pathname) {
+      case "/caixa":
+        return { href: voltaCaixa(params), rotulo: "Caixa" };
+      case "/caixa/pendentes":
+        return { href: linkPendentes(filtrosNaBusca(params)), rotulo: "A receber" };
+      case "/caixa/relatorio":
+        return { href: linkRelatorio(lerFiltros(params).mes), rotulo: "Relatório" };
+    }
+  }
+
+  return { href: "/caixa", rotulo: "Caixa" };
 }

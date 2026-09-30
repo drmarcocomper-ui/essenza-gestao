@@ -13,6 +13,7 @@ import {
   obterLancamento,
 } from "@/lib/caixa/consultas";
 import { exclusaoTravada } from "@/lib/caixa/travas";
+import { voltaDaOrigem } from "@/lib/caixa/url";
 import { formatarData } from "@/lib/formatters";
 
 export const metadata: Metadata = {
@@ -21,8 +22,11 @@ export const metadata: Metadata = {
 
 export default async function EditarLancamentoPage({
   params,
+  searchParams,
 }: PageProps<"/caixa/[id]/editar">) {
   const { id } = await params;
+  // Caixa (com visão e mês), A receber ou Relatório: de onde veio.
+  const volta = voltaDaOrigem((await searchParams).origem);
 
   const lancamento = await obterLancamento(id);
 
@@ -51,7 +55,7 @@ export default async function EditarLancamentoPage({
 
   return (
     <div className="space-y-4">
-      <Voltar href="/caixa" rotulo="Caixa" />
+      <Voltar href={volta.href} rotulo={volta.rotulo} />
 
       <h2 className="text-lg font-semibold text-neutral-900">
         Editar lançamento

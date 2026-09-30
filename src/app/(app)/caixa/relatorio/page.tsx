@@ -7,7 +7,7 @@ import Voltar from "@/components/layout/Voltar";
 import { formatarCentavos } from "@/lib/atendimentos/conta";
 import { listarRelatorioMes } from "@/lib/caixa/consultas";
 import { mesAtual } from "@/lib/caixa/mes";
-import { lerFiltros, linkCaixa } from "@/lib/caixa/url";
+import { lerFiltros, linkCaixa, linkEditarLancamento } from "@/lib/caixa/url";
 import { dataReferenciaCaixa } from "@/lib/caixa/visao";
 import { formatarDiaMes } from "@/lib/formatters";
 import { GRUPOS_DESPESA } from "@/lib/relatorio/classificar";
@@ -109,7 +109,11 @@ export default async function RelatorioPage({
         ) : (
           <ul className="divide-y divide-neutral-100">
             {pendencias.map((pendencia, indice) => (
-              <ItemPendencia key={indice} pendencia={pendencia} />
+              <ItemPendencia
+                key={indice}
+                pendencia={pendencia}
+                origem={linkRelatorio(mes)}
+              />
             ))}
           </ul>
         )}
@@ -206,7 +210,13 @@ function Linha({
   );
 }
 
-function ItemPendencia({ pendencia }: { pendencia: Pendencia }) {
+function ItemPendencia({
+  pendencia,
+  origem,
+}: {
+  pendencia: Pendencia;
+  origem: string;
+}) {
   const corpo = (
     <div className="flex items-baseline justify-between gap-3">
       <span className="min-w-0">
@@ -240,7 +250,7 @@ function ItemPendencia({ pendencia }: { pendencia: Pendencia }) {
   return (
     <li>
       <Link
-        href={`/caixa/${pendencia.id}/editar`}
+        href={linkEditarLancamento(pendencia.id, origem)}
         className="block min-h-11 px-4 py-3 active:bg-neutral-50"
       >
         {corpo}
