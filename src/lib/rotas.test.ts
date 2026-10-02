@@ -159,6 +159,26 @@ describe("rotas da seção Extensão", () => {
   });
 });
 
+describe("rotas do estoque de frascos", () => {
+  /**
+   * A página do produto e a contagem moram sob o `[id]` da revenda, e são
+   * linkadas com template literal, que o build não confere.
+   */
+  it.each([
+    "src/app/(app)/produtos/[id]/page.tsx",
+    "src/app/(app)/produtos/[id]/contar/page.tsx",
+  ])("%s existe", (arquivo) => {
+    expect(existsSync(path.join(RAIZ, arquivo))).toBe(true);
+  });
+
+  it.each(["/produtos/:dyn", "/produtos/:dyn/contar"])(
+    "%s é uma rota navegável",
+    (caminho) => {
+      expect(rotaExiste(caminho)).toBe(true);
+    },
+  );
+});
+
 describe("rotas do módulo de fórmula e atendimento", () => {
   /**
    * Os arquivos que o fluxo principal depende, fixados pelo caminho.
@@ -328,7 +348,9 @@ describe("botão Voltar", () => {
       "/clientes/:dyn",
     ],
     "produtos/novo/page.tsx": ["/produtos"],
+    "produtos/[id]/page.tsx": ["/produtos"],
     "produtos/[id]/editar/page.tsx": ["/produtos"],
+    "produtos/[id]/contar/page.tsx": ["/produtos/:dyn"],
     "produtos/extensao/nova/page.tsx": ["/produtos"],
     // Parte volta para a mãe; peça inteira, para a lista.
     "produtos/extensao/[id]/page.tsx": ["/produtos/extensao/:dyn", "/produtos"],
