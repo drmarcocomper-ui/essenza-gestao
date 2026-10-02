@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FlaskConical, Lock, Plus } from "lucide-react";
+import { FlaskConical, Lock, MessageCircle, Plus } from "lucide-react";
 
 import {
   editarObservacao,
@@ -23,9 +23,18 @@ import {
   obterAtendimento,
   type AtendimentoDetalhe,
 } from "@/lib/atendimentos/consultas";
+import {
+  linkDaMensagem,
+  mensagemDoAtendimento,
+} from "@/lib/atendimentos/mensagem";
 import { resumoReabertura } from "@/lib/atendimentos/reabertura";
 import { obterCliente } from "@/lib/clientes/consultas";
-import { formatarData, formatarDiaMes, formatarMoeda } from "@/lib/formatters";
+import {
+  formatarData,
+  formatarDiaMes,
+  formatarMoeda,
+  telefoneWhatsApp,
+} from "@/lib/formatters";
 import { listarPecasVendaveis } from "@/lib/pecas-extensao/consultas";
 import { resumoDaPeca } from "@/lib/pecas-extensao/regras";
 
@@ -109,6 +118,7 @@ export default async function AtendimentoPage({
       {atendimento.fechada ? (
         <ContaFechada
           atendimento={atendimento}
+          cliente={cliente}
           // Os dois ids amarrados no servidor, como no fechamento.
           reabrir={reabrirConta.bind(null, cliente.id, atendimento.id)}
         />
@@ -199,9 +209,11 @@ function paraCampo(valor: number) {
  */
 function ContaFechada({
   atendimento,
+  cliente,
   reabrir,
 }: {
   atendimento: AtendimentoDetalhe;
+  cliente: { nome: string; telefone: string | null };
   reabrir: () => Promise<{ erro?: string }>;
 }) {
   const total = atendimento.itens.reduce(
@@ -312,7 +324,50 @@ function ContaFechada({
         </p>
       )}
 
+      <EnviarParaCliente atendimento={atendimento} cliente={cliente} />
+
       <ReabrirConta acao={reabrir} resumo={resumoReabertura(atendimento.formas)} />
     </section>
+  );
+}
+
+/**
+ * O resumo da conta, pronto para ela mandar à cliente com um toque. O
+ * app só prepara a mensagem: quem envia é ela, pelo próprio WhatsApp.
+ * Sem telefone válido, o WhatsApp abre para ela escolher o contato.
+ */
+function EnviarParaCliente({
+  atendimento,
+  cliente,
+}: {
+  atendimento: AtendimentoDetalhe;
+  cliente: { nome: string; telefone: string | null };
+}) {
+  const texto = mensagemDoAtendimento({
+    cliente,
+    data: atendimento.data,
+    itens: atendimento.itens,
+  });
+
+  const temTelefone = telefoneWhatsApp(cliente.telefone) !== null;
+
+  return (
+    <div className="space-y-2">
+      <a
+        href={linkDaMensagem(cliente.telefone, texto)}
+        target="_blank"
+        rel="noopener"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 font-medium text-white active:bg-emerald-700"
+      >
+        <MessageCircle aria-hidden="true" className="size-5" />
+        Enviar para a cliente
+      </a>
+
+      {!temTelefone && (
+        <p className="text-center text-sm text-neutral-500">
+          Cliente sem telefone cadastrado
+        </p>
+      )}
+    </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   mascararMoeda,
   mascararTelefone,
   moedaParaNumero,
+  telefoneWhatsApp,
   valorParaCampo,
 } from "./formatters";
 
@@ -188,5 +189,29 @@ describe("valorParaCampo", () => {
   it("devolve vazio quando não há valor — lançamento novo", () => {
     expect(valorParaCampo(null)).toBe("");
     expect(valorParaCampo(undefined)).toBe("");
+  });
+});
+
+describe("telefoneWhatsApp", () => {
+  it.each([
+    ["(27) 99999-1234", "5527999991234"],
+    ["27999991234", "5527999991234"],
+    ["5527999991234", "5527999991234"],
+    ["2733356300", "552733356300"],
+    ["552733356300", "552733356300"],
+  ])("%s → %s", (entrada, esperado) => {
+    expect(telefoneWhatsApp(entrada)).toBe(esperado);
+  });
+
+  it.each([
+    ["vazio", ""],
+    ["null", null],
+    ["undefined", undefined],
+    ["lixo", "abc-def"],
+    ["curto", "99998888"],
+    ["12 dígitos sem 55", "112733356300"],
+    ["longo demais", "55279999912345"],
+  ])("%s → sem telefone", (_caso, entrada) => {
+    expect(telefoneWhatsApp(entrada)).toBeNull();
   });
 });

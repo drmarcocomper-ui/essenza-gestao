@@ -78,21 +78,34 @@ export function formatarDiaMes(data: string | null | undefined) {
 }
 
 /**
- * Link do WhatsApp. Só dígitos, com o 55 na frente — e sem duplicar o 55
- * quando o número já vier com o código do país.
+ * Telefone no formato do wa.me: só dígitos, com o 55 na frente.
  *
- * Devolve null para telefone ausente ou curto demais, para a UI poder
+ * 10 ou 11 dígitos (DDD + número) ganham o 55; 12 ou 13 que já começam
+ * com 55 ficam como estão. Qualquer outra coisa é null — melhor não
+ * abrir conversa nenhuma do que abrir com o número errado.
+ */
+export function telefoneWhatsApp(telefone: string | null | undefined) {
+  const digitos = apenasDigitos(telefone);
+
+  if (digitos.length === 10 || digitos.length === 11) return `55${digitos}`;
+
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith("55")) {
+    return digitos;
+  }
+
+  return null;
+}
+
+/**
+ * Link do WhatsApp para a conversa com a cliente.
+ *
+ * Devolve null para telefone ausente ou inválido, para a UI poder
  * simplesmente não mostrar o botão.
  */
 export function linkWhatsApp(telefone: string | null | undefined) {
-  const digitos = apenasDigitos(telefone);
+  const numero = telefoneWhatsApp(telefone);
 
-  if (digitos.length < 10) return null;
-
-  const comPais =
-    digitos.length >= 12 && digitos.startsWith("55") ? digitos : `55${digitos}`;
-
-  return `https://wa.me/${comPais}`;
+  return numero ? `https://wa.me/${numero}` : null;
 }
 
 /**
