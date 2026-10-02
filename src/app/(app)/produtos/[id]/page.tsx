@@ -169,7 +169,10 @@ function LinhaHistorico({ evento }: { evento: EventoHistorico }) {
 
   if (evento.tipo === "compra") {
     return (
-      <div className={classeLinha}>
+      <Link
+        href={`/produtos/compras/${evento.compraId}`}
+        className={`${classeLinha} active:bg-neutral-100`}
+      >
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-neutral-900">
             Compra · {formatarData(evento.data)}
@@ -182,7 +185,7 @@ function LinhaHistorico({ evento }: { evento: EventoHistorico }) {
         <span className="shrink-0 font-medium tabular-nums text-emerald-700">
           +{formatarUnidades(evento.quantidade)}
         </span>
-      </div>
+      </Link>
     );
   }
 

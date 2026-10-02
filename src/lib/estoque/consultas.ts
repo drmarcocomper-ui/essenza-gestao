@@ -1,4 +1,5 @@
 import { exigirSessao } from "@/lib/auth";
+import { totalDaCompra } from "@/lib/estoque/regras";
 import {
   registradoDepois,
   type Contagem,
@@ -250,4 +251,161 @@ export async function lerMovimentos(
 /** Os movimentos de um produto só. */
 export async function lerMovimentosDoProduto(id: string): Promise<Movimentos> {
   return (await lerMovimentos([id])).get(id) ?? vazio();
+}
+
+// ---------------------------------------------------------------------
+// Compras
+// ---------------------------------------------------------------------
+
+export type CompraNaLista = {
+  id: string;
+  data: string;
+  fornecedor: string;
+  quantidadeItens: number;
+  total: number;
+  temNota: boolean;
+};
+
+type LinhaCompra = {
+  id: string;
+  data: string;
+  fornecedor: string;
+  nota_path: string | null;
+  compra_itens: { quantidade: NumericBanco; custo_unitario: NumericBanco }[];
+};
+
+/** Todas as compras, da mais recente para a mais antiga. */
+export async function listarCompras(): Promise<CompraNaLista[]> {
+  const { supabase } = await exigirSessao();
+
+  const linhas = await lerEmPaginas<LinhaCompra>(
+    (inicio, fim) =>
+      supabase
+        .from("compras")
+        .select("id, data, fornecedor, nota_path, compra_itens(quantidade, custo_unitario)")
+        .order("data", { ascending: false })
+        .order("criado_em", { ascending: false })
+        // id desempata: sem ordem total, a paginação pode repetir ou pular.
+        .order("id")
+        .range(inicio, fim),
+    "as compras",
+  );
+
+  return linhas.map((linha) => ({
+    id: linha.id,
+    data: linha.data,
+    fornecedor: linha.fornecedor,
+    quantidadeItens: linha.compra_itens.length,
+    total: totalDaCompra(
+      linha.compra_itens.map((item) => ({
+        quantidade: Number(item.quantidade),
+        custoUnitario: Number(item.custo_unitario),
+      })),
+    ),
+    temNota: linha.nota_path !== null,
+  }));
+}
+
+export type ItemDaCompra = {
+  id: string;
+  produtoId: string;
+  produtoNome: string;
+  produtoMarca: string | null;
+  produtoAtivo: boolean;
+  quantidade: number;
+  custoUnitario: number;
+};
+
+export type CompraDetalhe = {
+  id: string;
+  data: string;
+  fornecedor: string;
+  observacoes: string | null;
+  /** {compra_id}/nota.<ext> no bucket notas-fiscais; null = sem nota. */
+  notaPath: string | null;
+  itens: ItemDaCompra[];
+};
+
+type LinhaCompraDetalhe = {
+  id: string;
+  data: string;
+  fornecedor: string;
+  observacoes: string | null;
+  nota_path: string | null;
+  compra_itens: {
+    id: string;
+    produto_id: string;
+    quantidade: NumericBanco;
+    custo_unitario: NumericBanco;
+    produtos: { nome: string; marca: string | null; ativo: boolean } | null;
+  }[];
+};
+
+/** Uma compra com as linhas, em ordem alfabética de produto; null se não existe. */
+export async function obterCompra(id: string): Promise<CompraDetalhe | null> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("compras")
+    .select(
+      "id, data, fornecedor, observacoes, nota_path, compra_itens(id, produto_id, quantidade, custo_unitario, produtos(nome, marca, ativo))",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    // id que não é uuid chega como 22P02: é o mesmo que não existir.
+    if (error.code === "22P02") return null;
+
+    throw new Error(`Não foi possível carregar a compra: ${error.message}`);
+  }
+
+  if (!data) return null;
+
+  const linha = data as unknown as LinhaCompraDetalhe;
+
+  return {
+    id: linha.id,
+    data: linha.data,
+    fornecedor: linha.fornecedor,
+    observacoes: linha.observacoes,
+    notaPath: linha.nota_path,
+    itens: linha.compra_itens
+      .map((item) => ({
+        id: item.id,
+        produtoId: item.produto_id,
+        produtoNome: item.produtos?.nome ?? "Produto",
+        produtoMarca: item.produtos?.marca ?? null,
+        produtoAtivo: item.produtos?.ativo ?? false,
+        quantidade: Number(item.quantidade),
+        custoUnitario: Number(item.custo_unitario),
+      }))
+      .sort((a, b) =>
+        a.produtoNome.localeCompare(b.produtoNome, "pt-BR", {
+          sensitivity: "base",
+        }),
+      ),
+  };
+}
+
+/** Fornecedores já usados, para o `<datalist>` da compra. */
+export async function listarFornecedores(): Promise<string[]> {
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase.from("compras").select("fornecedor");
+
+  if (error) {
+    throw new Error(`Não foi possível carregar os fornecedores: ${error.message}`);
+  }
+
+  // Um por grafia, sem caixa nem espaço sobrando decidindo duplicata.
+  const porChave = new Map<string, string>();
+
+  for (const { fornecedor } of (data ?? []) as { fornecedor: string }[]) {
+    const chave = fornecedor.trim().toLocaleLowerCase("pt-BR");
+
+    if (!porChave.has(chave)) porChave.set(chave, fornecedor.trim());
+  }
+
+  return [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }

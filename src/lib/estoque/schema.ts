@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { hoje } from "@/lib/caixa/mes";
+import {
+  indicesProdutoRepetido,
+  MENSAGEM_PRODUTO_REPETIDO,
+} from "@/lib/estoque/regras";
+import { moedaParaNumero } from "@/lib/formatters";
 
 /**
  * Formulários do estoque de frascos (021): contagem e compra.
@@ -100,6 +105,178 @@ export function lerContagem(formData: FormData) {
   return Object.fromEntries(
     CAMPOS_CONTAGEM.map((campo) => [campo, String(formData.get(campo) ?? "")]),
   ) as Record<CampoContagem, string>;
+}
+
+// ---------------------------------------------------------------------
+// Compra
+// ---------------------------------------------------------------------
+
+/** Teto de numeric(12,2), o custo unitário da 021. */
+const CUSTO_MAXIMO = 9_999_999_999.99;
+
+/** Linhas por compra: uma nota de distribuidora não passa disso. */
+export const MAXIMO_ITENS = 50;
+
+export const MENSAGEM_SEM_ITENS = "Inclua pelo menos um produto.";
+
+/** Mais casas do que a coluna guarda: o banco arredondaria calado. */
+function casasDemais(numero: number, casas: number) {
+  const escala = numero * 10 ** casas;
+
+  return Math.abs(escala - Math.round(escala)) > 1e-6;
+}
+
+/** Custo unitário em reais: obrigatório, zero aceito (brinde é dado). */
+const custo = z.string().transform((bruto, ctx) => {
+  if (bruto.trim() === "") {
+    ctx.addIssue({ code: "custom", message: "Informe o custo" });
+    return z.NEVER;
+  }
+
+  const numero = moedaParaNumero(bruto);
+
+  if (numero === null) {
+    ctx.addIssue({ code: "custom", message: "Custo inválido" });
+    return z.NEVER;
+  }
+
+  if (numero < 0) {
+    ctx.addIssue({ code: "custom", message: "O custo não pode ser negativo" });
+    return z.NEVER;
+  }
+
+  if (numero > CUSTO_MAXIMO) {
+    ctx.addIssue({ code: "custom", message: "Custo alto demais" });
+    return z.NEVER;
+  }
+
+  if (casasDemais(numero, 2)) {
+    ctx.addIssue({ code: "custom", message: "Use no máximo 2 casas decimais" });
+    return z.NEVER;
+  }
+
+  return numero;
+});
+
+export const cabecalhoCompraSchema = z.object({
+  fornecedor: z
+    .string()
+    .trim()
+    .min(1, "Informe o fornecedor")
+    .max(120, "Máximo de 120 caracteres"),
+  data: dataSemFuturo,
+  observacoes: textoOpcional(1000),
+});
+
+export const itemCompraSchema = z.object({
+  produto_id: z.string().trim().min(1, "Escolha o produto"),
+  quantidade: quantidadeInteira(1),
+  custo_unitario: custo,
+});
+
+export type CampoCompra = keyof z.input<typeof cabecalhoCompraSchema>;
+export type CampoItemCompra = keyof z.input<typeof itemCompraSchema>;
+
+export type ItemCompraBruto = Record<CampoItemCompra, string>;
+export type CompraBruta = Record<CampoCompra, string> & {
+  itens: ItemCompraBruto[];
+};
+
+export type DadosCompra = z.output<typeof cabecalhoCompraSchema> & {
+  itens: z.output<typeof itemCompraSchema>[];
+};
+
+/** Texto ou "", nunca outra coisa: o servidor não confia na forma. */
+function texto(valor: unknown) {
+  return typeof valor === "string" ? valor : "";
+}
+
+/**
+ * A compra como chega da tela → objeto plano, só com os campos
+ * previstos. A tela manda objeto, não FormData (as linhas vivem em
+ * estado), e o que não for texto vira "".
+ */
+export function lerCompra(valor: unknown): CompraBruta {
+  const objeto =
+    typeof valor === "object" && valor !== null
+      ? (valor as Record<string, unknown>)
+      : {};
+  const itens = Array.isArray(objeto.itens) ? objeto.itens : [];
+
+  return {
+    fornecedor: texto(objeto.fornecedor),
+    data: texto(objeto.data),
+    observacoes: texto(objeto.observacoes),
+    itens: itens.map((item) => {
+      const linha =
+        typeof item === "object" && item !== null
+          ? (item as Record<string, unknown>)
+          : {};
+
+      return {
+        produto_id: texto(linha.produto_id),
+        quantidade: texto(linha.quantidade),
+        custo_unitario: texto(linha.custo_unitario),
+      };
+    }),
+  };
+}
+
+export type ValidacaoCompra =
+  | { ok: true; dados: DadosCompra }
+  | {
+      ok: false;
+      mensagem?: string;
+      erros: Partial<Record<CampoCompra, string>>;
+      /** Erros de cada linha, na ordem da tela. */
+      errosItens: Partial<Record<CampoItemCompra, string>>[];
+    };
+
+/**
+ * Cabeçalho, cada linha, e o mesmo produto duas vezes — que o banco
+ * também recusa, mas aqui o recado sai na linha certa.
+ */
+export function validarCompra(bruta: CompraBruta): ValidacaoCompra {
+  const cabecalho = cabecalhoCompraSchema.safeParse(bruta);
+  const erros = cabecalho.success
+    ? {}
+    : errosPorCampo<CampoCompra>(cabecalho.error);
+
+  const errosItens = bruta.itens.map(
+    (): Partial<Record<CampoItemCompra, string>> => ({}),
+  );
+  const itens: z.output<typeof itemCompraSchema>[] = [];
+
+  bruta.itens.forEach((item, indice) => {
+    const validacao = itemCompraSchema.safeParse(item);
+
+    if (validacao.success) itens.push(validacao.data);
+    else errosItens[indice] = errosPorCampo<CampoItemCompra>(validacao.error);
+  });
+
+  for (const indice of indicesProdutoRepetido(
+    bruta.itens.map((item) => item.produto_id.trim()),
+  )) {
+    errosItens[indice].produto_id ??= MENSAGEM_PRODUTO_REPETIDO;
+  }
+
+  const mensagem =
+    bruta.itens.length === 0
+      ? MENSAGEM_SEM_ITENS
+      : bruta.itens.length > MAXIMO_ITENS
+        ? `No máximo ${MAXIMO_ITENS} produtos por compra.`
+        : undefined;
+
+  const temErro =
+    Object.keys(erros).length > 0 ||
+    errosItens.some((erro) => Object.keys(erro).length > 0) ||
+    mensagem !== undefined;
+
+  if (!cabecalho.success || temErro) {
+    return { ok: false, mensagem, erros, errosItens };
+  }
+
+  return { ok: true, dados: { ...cabecalho.data, itens } };
 }
 
 /** Achata os erros do Zod em `campo → primeira mensagem`. */

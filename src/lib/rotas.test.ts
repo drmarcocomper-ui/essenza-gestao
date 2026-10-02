@@ -161,22 +161,46 @@ describe("rotas da seção Extensão", () => {
 
 describe("rotas do estoque de frascos", () => {
   /**
-   * A página do produto e a contagem moram sob o `[id]` da revenda, e são
-   * linkadas com template literal, que o build não confere.
+   * A página do produto e a contagem moram sob o `[id]` da revenda; as
+   * compras, sob o segmento estático `compras`, que o Next resolve antes
+   * desse `[id]`. Quase tudo é linkado com template literal, que o build
+   * não confere.
    */
   it.each([
     "src/app/(app)/produtos/[id]/page.tsx",
     "src/app/(app)/produtos/[id]/contar/page.tsx",
+    "src/app/(app)/produtos/compras/page.tsx",
+    "src/app/(app)/produtos/compras/nova/page.tsx",
+    "src/app/(app)/produtos/compras/[id]/page.tsx",
+    "src/app/(app)/produtos/compras/[id]/editar/page.tsx",
   ])("%s existe", (arquivo) => {
     expect(existsSync(path.join(RAIZ, arquivo))).toBe(true);
   });
 
-  it.each(["/produtos/:dyn", "/produtos/:dyn/contar"])(
-    "%s é uma rota navegável",
-    (caminho) => {
-      expect(rotaExiste(caminho)).toBe(true);
-    },
-  );
+  it.each([
+    "/produtos/:dyn",
+    "/produtos/:dyn/contar",
+    "/produtos/compras",
+    "/produtos/compras/nova",
+    "/produtos/compras/:dyn",
+    "/produtos/compras/:dyn/editar",
+  ])("%s é uma rota navegável", (caminho) => {
+    expect(rotaExiste(caminho)).toBe(true);
+  });
+
+  it("o histórico do produto linka a compra e o atendimento", () => {
+    const pagina = readFileSync(
+      path.join(RAIZ, "src/app/(app)/produtos/[id]/page.tsx"),
+      "utf8",
+    );
+
+    expect(linksDoArquivo(pagina)).toEqual(
+      expect.arrayContaining([
+        "/produtos/compras/:dyn",
+        "/clientes/:dyn/atendimentos/:dyn",
+      ]),
+    );
+  });
 });
 
 describe("rotas do módulo de fórmula e atendimento", () => {
@@ -351,6 +375,10 @@ describe("botão Voltar", () => {
     "produtos/[id]/page.tsx": ["/produtos"],
     "produtos/[id]/editar/page.tsx": ["/produtos"],
     "produtos/[id]/contar/page.tsx": ["/produtos/:dyn"],
+    "produtos/compras/page.tsx": ["/produtos"],
+    "produtos/compras/nova/page.tsx": ["/produtos/compras"],
+    "produtos/compras/[id]/page.tsx": ["/produtos/compras"],
+    "produtos/compras/[id]/editar/page.tsx": ["/produtos/compras/:dyn"],
     "produtos/extensao/nova/page.tsx": ["/produtos"],
     // Parte volta para a mãe; peça inteira, para a lista.
     "produtos/extensao/[id]/page.tsx": ["/produtos/extensao/:dyn", "/produtos"],
