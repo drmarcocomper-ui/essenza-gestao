@@ -275,6 +275,34 @@ describe("montarResumo", () => {
     expect(Number.isInteger(resumo.totalPJ.centavos)).toBe(true);
   });
 
+  it("resultado = entradas recebidas − despesas; retirada e previsto fora", () => {
+    const resumo = montarResumo([
+      entrada({ instituicao: "SumUp", valor: 1000 }),
+      entrada({ instituicao: "PicPay", valor: 200.1 }),
+      entrada({ instituicao: "Dinheiro", titularidade: null, valor: 50 }),
+      entrada({ instituicao: "Nubank", titularidade: null, valor: 30.2 }),
+      entrada({ instituicao: "SumUp", status: "Pendente", data_caixa: null, valor: 999 }),
+      saida({ descricao: "Aluguel", valor: 700.3 }),
+      saida({ descricao: "Aluguel", status: "Pendente", data_caixa: null, valor: 888 }),
+      saida({ categoria: "Participação Lucros", descricao: "Retirada", valor: 400 }),
+    ]);
+
+    expect(resumo.totalEntradas.centavos).toBe(100000 + 20010 + 5000 + 3020);
+    expect(resumo.totalEntradas.linhas).toHaveLength(4);
+    expect(resumo.totalDespesas.centavos).toBe(70030);
+    expect(resumo.retirada.centavos).toBe(40000);
+    expect(resumo.resultado).toBe(128030 - 70030);
+  });
+
+  it("resultado pode ser negativo", () => {
+    const resumo = montarResumo([
+      entrada({ instituicao: "SumUp", valor: 100 }),
+      saida({ descricao: "Aluguel", valor: 1500 }),
+    ]);
+
+    expect(resumo.resultado).toBe(-140000);
+  });
+
   it("linhas ordenadas pela data em que o dinheiro andou", () => {
     const resumo = montarResumo([
       entrada({ instituicao: "SumUp", data_caixa: "2026-09-20", descricao: "b" }),

@@ -30,10 +30,17 @@ export type ResumoRelatorio = {
   entradas: Record<ContaEntrada, Grupo>;
   totalPJ: Grupo;
   totalPF: Grupo;
+  /** PJ + PF + Dinheiro + Sem PF/PJ: tudo o que caiu no mês. */
+  totalEntradas: Grupo;
   despesas: Record<GrupoDespesa, Grupo>;
   totalDespesas: Grupo;
   /** Participação nos lucros: fora do total de despesas. */
   retirada: Grupo;
+  /**
+   * Total de entradas − total de despesas, em centavos. A retirada fica
+   * de fora: é dinheiro dela saindo do lucro, não custo do salão.
+   */
+  resultado: number;
   /** Entradas Pendentes: listadas, nunca somadas nos totais acima. */
   previsto: Grupo;
 };
@@ -97,13 +104,22 @@ export function montarResumo(
     incluir(grupo === "Retirada" ? retirada : despesas[grupo], lancamento);
   }
 
+  const totalEntradas = juntar(
+    ...CONTAS_ENTRADA.map((conta) => entradas[conta]),
+  );
+  const totalDespesas = juntar(
+    ...GRUPOS_DESPESA.map((grupo) => despesas[grupo]),
+  );
+
   return {
     entradas,
     totalPJ: juntar(entradas["PJ SumUp"], entradas["PJ Nubank"]),
     totalPF: juntar(entradas["PF Nubank"], entradas["PF PicPay"]),
+    totalEntradas,
     despesas,
-    totalDespesas: juntar(...GRUPOS_DESPESA.map((grupo) => despesas[grupo])),
+    totalDespesas,
     retirada,
+    resultado: totalEntradas.centavos - totalDespesas.centavos,
     previsto,
   };
 }

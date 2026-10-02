@@ -70,6 +70,7 @@ export default async function RelatorioPage({
         <Linha rotulo="Total PF" grupo={resumo.totalPF} total />
         <Linha rotulo="Dinheiro" grupo={resumo.entradas.Dinheiro} total />
         <Linha rotulo="Sem PF/PJ" grupo={resumo.entradas["Sem PF/PJ"]} total />
+        <Linha rotulo="Total de entradas" grupo={resumo.totalEntradas} total />
       </Bloco>
 
       <Bloco titulo="Saídas">
@@ -77,6 +78,22 @@ export default async function RelatorioPage({
           <Linha key={grupo} rotulo={grupo} grupo={resumo.despesas[grupo]} />
         ))}
         <Linha rotulo="Total de despesas" grupo={resumo.totalDespesas} total />
+      </Bloco>
+
+      <Bloco titulo="Resultado do mês">
+        <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
+          <span className="font-semibold text-neutral-900">Resultado</span>
+          <span
+            className={`font-semibold tabular-nums ${
+              resumo.resultado < 0 ? "text-red-700" : "text-neutral-900"
+            }`}
+          >
+            {valor(resumo.resultado)}
+          </span>
+        </div>
+        <p className="px-4 pb-3 text-sm text-neutral-500">
+          Total de entradas menos total de despesas. A retirada não entra.
+        </p>
       </Bloco>
 
       <Bloco titulo="Retirada (participação nos lucros)">
