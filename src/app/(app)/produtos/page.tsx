@@ -2,27 +2,53 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+import ListaEstoque from "@/components/produtos/ListaEstoque";
 import ListaPecas from "@/components/produtos/ListaPecas";
 import ListaProdutos from "@/components/produtos/ListaProdutos";
+import {
+  lerMovimentos,
+  listarProdutosDeEstoque,
+} from "@/lib/estoque/consultas";
+import { calcularSaldo } from "@/lib/estoque/saldo";
 import {
   listarContasDasPecas,
   listarPecas,
 } from "@/lib/pecas-extensao/consultas";
 import { listarProdutos } from "@/lib/produtos/consultas";
 
+/** Os frascos de revenda ativos, cada um com o saldo calculado. */
+async function listarEstoque() {
+  const produtos = await listarProdutosDeEstoque();
+  const movimentos = await lerMovimentos(produtos.map((produto) => produto.id));
+
+  return produtos.map((produto) => {
+    const doProduto = movimentos.get(produto.id);
+
+    return {
+      ...produto,
+      saldo: calcularSaldo(
+        doProduto?.contagens ?? [],
+        doProduto?.entradas ?? [],
+        doProduto?.saidas ?? [],
+      ),
+    };
+  });
+}
+
 export const metadata: Metadata = {
   title: "Produtos — Essenza",
 };
 
 /**
- * A aba Produtos é feita de seções: revenda (`produtos`) e peças de
- * extensão (`pecas_extensao`, 018). As rotas da extensão ficam sob o
- * segmento estático `extensao`, que o Next resolve antes do `[id]` da
- * revenda.
+ * A aba Produtos é feita de seções: revenda (`produtos`), o estoque dos
+ * frascos de revenda (021) e peças de extensão (`pecas_extensao`, 018).
+ * As rotas da extensão e das compras ficam sob os segmentos estáticos
+ * `extensao` e `compras`, que o Next resolve antes do `[id]` da revenda.
  */
 export default async function ProdutosPage() {
-  const [produtos, pecas, contas] = await Promise.all([
+  const [produtos, estoque, pecas, contas] = await Promise.all([
     listarProdutos(),
+    listarEstoque(),
     listarPecas(),
     listarContasDasPecas(),
   ]);
@@ -39,6 +65,36 @@ export default async function ProdutosPage() {
         </h2>
 
         <ListaProdutos produtos={produtos} />
+      </section>
+
+      <section aria-labelledby="secao-estoque" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2
+            id="secao-estoque"
+            className="text-sm font-medium text-neutral-500"
+          >
+            Estoque
+          </h2>
+
+          <div className="-mr-2 flex items-center">
+            <Link
+              href="/produtos/compras"
+              className="flex min-h-11 items-center rounded-xl px-2 text-sm font-medium text-neutral-600 active:bg-neutral-100"
+            >
+              Compras
+            </Link>
+
+            <Link
+              href="/produtos/compras/nova"
+              className="flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-medium text-rose-700 active:bg-rose-50"
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              Nova compra
+            </Link>
+          </div>
+        </div>
+
+        <ListaEstoque produtos={estoque} />
       </section>
 
       <section aria-labelledby="secao-extensao" className="space-y-3">
