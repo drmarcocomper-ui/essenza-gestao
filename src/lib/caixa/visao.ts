@@ -54,8 +54,16 @@ export function marcaCaixa(lancamento: Datas): MarcaCaixa {
  * filtra por expressão.
  */
 export function filtroMesCaixa(mes: string) {
+  return filtroPeriodoCaixa(mes, mes);
+}
+
+/**
+ * A mesma regra de `filtroMesCaixa`, do primeiro dia de `mesInicial` ao
+ * último de `mesFinal` — o ano do relatório anual sai numa consulta só.
+ */
+export function filtroPeriodoCaixa(mesInicial: string, mesFinal: string) {
   const entre = (coluna: string) =>
-    `${coluna}.gte.${primeiroDia(mes)},${coluna}.lte.${ultimoDia(mes)}`;
+    `${coluna}.gte.${primeiroDia(mesInicial)},${coluna}.lte.${ultimoDia(mesFinal)}`;
 
   return [
     `and(status.eq.Pago,${entre("data_caixa")})`,

@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
 
+import { dataReferenciaCaixa } from "@/lib/caixa/visao";
+
 import {
   classificarEntrada,
   classificarSaida,
+  GRUPOS_DESPESA,
   type LancamentoRelatorio,
 } from "./classificar";
-import { campoCsv, centavosCsv, gerarCsv, nomeArquivoCsv } from "./csv";
+import {
+  campoCsv,
+  centavosCsv,
+  gerarCsv,
+  gerarCsvAnual,
+  nomeArquivoCsv,
+  nomeArquivoCsvAnual,
+} from "./csv";
 import { levantarPendencias } from "./pendencias";
-import { montarResumo } from "./resumo";
+import { montarResumo, resumirAno } from "./resumo";
 
 let sequencia = 0;
 
@@ -499,5 +509,206 @@ describe("CSV", () => {
 
   it("nome do arquivo", () => {
     expect(nomeArquivoCsv("2026-09")).toBe("essenza-relatorio-2026-09.csv");
+  });
+});
+
+describe("CSV anual", () => {
+  /** O ano de 2026 espalhado: Pago pela data_caixa, Pendente pela prevista. */
+  function ano2026() {
+    return [
+      entrada({ instituicao: "SumUp", data_caixa: "2026-01-15", valor: 0.1 }),
+      entrada({ instituicao: "SumUp", data_caixa: "2026-01-20", valor: 0.2 }),
+      entrada({ instituicao: "PicPay", data_caixa: "2026-03-02", valor: 150.35 }),
+      entrada({ instituicao: "Dinheiro", titularidade: null, data_caixa: "2026-03-09", valor: 60 }),
+      // Vendida em setembro, caiu em outubro: é outubro.
+      entrada({
+        instituicao: "Nubank",
+        titularidade: "PF",
+        data_competencia: "2026-09-28",
+        data_caixa: "2026-10-01",
+        valor: 333.33,
+      }),
+      entrada({ instituicao: "Nubank", titularidade: null, data_caixa: "2026-09-12", valor: 80 }),
+      entrada({ instituicao: "SumUp", data_caixa: "2026-09-03", valor: 1200.45 }),
+      entrada({
+        instituicao: "SumUp",
+        status: "Pendente",
+        data_caixa: null,
+        data_prevista: "2026-09-25",
+        valor: 209.97,
+      }),
+      entrada({
+        instituicao: "SumUp",
+        status: "Pendente",
+        data_caixa: null,
+        data_prevista: "2026-11-25",
+        valor: 209.97,
+      }),
+      saida({ descricao: "Aluguel", data_caixa: "2026-03-05", valor: 1500 }),
+      saida({ descricao: "Aluguel", data_caixa: "2026-09-05", valor: 1500 }),
+      saida({ descricao: "EDP", data_caixa: "2026-09-10", valor: 180.37 }),
+      saida({ descricao: "Curso", data_caixa: "2026-09-20", valor: 2000 }),
+      saida({
+        categoria: "Participação Lucros",
+        descricao: "Retirada",
+        data_caixa: "2026-09-30",
+        valor: 1000,
+      }),
+      // Fora do ano: não entra em nada.
+      entrada({ instituicao: "SumUp", data_caixa: "2025-12-31", valor: 999 }),
+    ];
+  }
+
+  function tabela(csv: string) {
+    return csv
+      .slice(1)
+      .split("\r\n")
+      .filter(Boolean)
+      .map((linha) => linha.split(";"));
+  }
+
+  /** "1234,56" → 123456, sem passar por ponto flutuante. */
+  function centavos(campo: string) {
+    return Number(campo.replace(",", ""));
+  }
+
+  it("BOM, ';', 12 meses e o total, com o cabeçalho na ordem da tela", () => {
+    const csv = gerarCsvAnual(ano2026(), "2026");
+
+    expect(csv.startsWith("﻿")).toBe(true);
+    expect(csv.endsWith("\r\n")).toBe(true);
+
+    const linhas = tabela(csv);
+
+    expect(linhas[0]).toEqual([
+      "Mês",
+      "PJ SumUp",
+      "PJ Nubank",
+      "Total PJ",
+      "PF Nubank",
+      "PF PicPay",
+      "Total PF",
+      "Dinheiro",
+      "Sem PF/PJ",
+      "Total entradas",
+      "Aluguel",
+      "Luz",
+      "Condomínio",
+      "Boletos de produtos",
+      "DAS MEI",
+      "INSS",
+      "Outras",
+      "Total despesas",
+      "Resultado",
+      "Participação nos lucros",
+      "Previsto a receber",
+    ]);
+    expect(linhas).toHaveLength(1 + 12 + 1);
+    expect(linhas.slice(1, 13).map((l) => l[0])).toEqual([
+      "Janeiro",
+      "Fevereiro",
+      "Março",
+      "Abril",
+      "Maio",
+      "Junho",
+      "Julho",
+      "Agosto",
+      "Setembro",
+      "Outubro",
+      "Novembro",
+      "Dezembro",
+    ]);
+    expect(linhas[13][0]).toBe("Total 2026");
+    expect(linhas.every((l) => l.length === 21)).toBe(true);
+  });
+
+  it("vírgula decimal, sem R$, e soma em centavos (0,10 + 0,20 = 0,30)", () => {
+    const linhas = tabela(gerarCsvAnual(ano2026(), "2026"));
+    const janeiro = linhas[1];
+    const marco = linhas[3];
+
+    expect(janeiro[1]).toBe("0,30");
+    expect(marco.slice(5, 11)).toEqual([
+      "150,35",
+      "150,35",
+      "60,00",
+      "0,00",
+      "210,35",
+      "1500,00",
+    ]);
+    expect(marco[18]).toBe("-1289,65");
+    expect(linhas.flat().join("")).not.toContain("R$");
+    expect(linhas.flat().join("")).not.toContain(".");
+  });
+
+  it("meses sem lançamento e futuros saem zerados", () => {
+    const linhas = tabela(gerarCsvAnual([], "2026"));
+
+    expect(linhas).toHaveLength(14);
+    for (const linha of linhas.slice(1, 13)) {
+      expect(linha.slice(1)).toEqual(Array(20).fill("0,00"));
+    }
+  });
+
+  it("a linha de total é a soma das 12 linhas, coluna a coluna; previsto em branco", () => {
+    const linhas = tabela(gerarCsvAnual(ano2026(), "2026"));
+    const meses = linhas.slice(1, 13);
+    const total = linhas[13];
+
+    for (let coluna = 1; coluna < 20; coluna += 1) {
+      const soma = meses.reduce((s, linha) => s + centavos(linha[coluna]), 0);
+
+      expect(centavos(total[coluna]), linhas[0][coluna]).toBe(soma);
+    }
+
+    expect(total[20]).toBe("");
+    expect(centavos(total[9])).toBe(30 + 15035 + 6000 + 33333 + 8000 + 120045);
+  });
+
+  it("setembro no CSV anual = o que o resumo do mês devolve para setembro", () => {
+    const lancamentos = ano2026();
+    const setembro = montarResumo(
+      lancamentos.filter((l) => dataReferenciaCaixa(l).startsWith("2026-09")),
+    );
+    const linha = tabela(gerarCsvAnual(lancamentos, "2026"))[9];
+
+    expect(linha[0]).toBe("Setembro");
+    expect(linha.slice(1).map(centavos)).toEqual([
+      setembro.entradas["PJ SumUp"].centavos,
+      setembro.entradas["PJ Nubank"].centavos,
+      setembro.totalPJ.centavos,
+      setembro.entradas["PF Nubank"].centavos,
+      setembro.entradas["PF PicPay"].centavos,
+      setembro.totalPF.centavos,
+      setembro.entradas.Dinheiro.centavos,
+      setembro.entradas["Sem PF/PJ"].centavos,
+      setembro.totalEntradas.centavos,
+      ...GRUPOS_DESPESA.map((grupo) => setembro.despesas[grupo].centavos),
+      setembro.totalDespesas.centavos,
+      setembro.resultado,
+      setembro.retirada.centavos,
+      setembro.previsto.centavos,
+    ]);
+    // E os números esperados, para não ser só a função contra ela mesma.
+    expect(setembro.totalPJ.centavos).toBe(120045);
+    expect(setembro.entradas["Sem PF/PJ"].centavos).toBe(8000);
+    expect(setembro.totalPF.centavos).toBe(0);
+    expect(setembro.totalDespesas.centavos).toBe(150000 + 18037 + 200000);
+    expect(setembro.retirada.centavos).toBe(100000);
+    expect(setembro.resultado).toBe(128045 - 368037);
+    expect(setembro.previsto.centavos).toBe(20997);
+  });
+
+  it("resumirAno põe o Pago no mês da data_caixa, não da competência", () => {
+    const meses = resumirAno(ano2026(), "2026");
+
+    expect(meses.map((m) => m.mes)[0]).toBe("2026-01");
+    expect(meses[8].resumo.totalPF.centavos).toBe(0);
+    expect(meses[9].resumo.totalPF.centavos).toBe(33333);
+    expect(meses[10].resumo.previsto.centavos).toBe(20997);
+  });
+
+  it("nome do arquivo", () => {
+    expect(nomeArquivoCsvAnual("2026")).toBe("Essenza_2026_relatorio_anual.csv");
   });
 });

@@ -3,7 +3,11 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { linkCsvRelatorio, linkRelatorio } from "@/lib/relatorio/url";
+import {
+  linkCsvAnual,
+  linkCsvRelatorio,
+  linkRelatorio,
+} from "@/lib/relatorio/url";
 
 /**
  * Todo link interno do app aponta para uma rota que existe de verdade.
@@ -238,6 +242,7 @@ describe("relatório do mês", () => {
   it.each([
     "src/app/(app)/caixa/relatorio/page.tsx",
     "src/app/(app)/caixa/relatorio/csv/route.ts",
+    "src/app/(app)/caixa/relatorio/csv-anual/route.ts",
   ])("%s existe", (arquivo) => {
     expect(existsSync(path.join(RAIZ, arquivo))).toBe(true);
   });
@@ -245,14 +250,20 @@ describe("relatório do mês", () => {
   it("os links do relatório resolvem para rotas existentes", () => {
     const url = readFileSync(path.join(RAIZ, "src/lib/relatorio/url.ts"), "utf8");
 
-    expect(linksDoArquivo(url)).toEqual(["/caixa/relatorio", "/caixa/relatorio/csv"]);
+    expect(linksDoArquivo(url)).toEqual([
+      "/caixa/relatorio",
+      "/caixa/relatorio/csv",
+      "/caixa/relatorio/csv-anual",
+    ]);
     expect(rotaExiste("/caixa/relatorio")).toBe(true);
     expect(rotaExiste("/caixa/relatorio/csv")).toBe(true);
+    expect(rotaExiste("/caixa/relatorio/csv-anual")).toBe(true);
   });
 
   it("levam o mês na convenção do Caixa", () => {
     expect(linkRelatorio("2026-09")).toBe("/caixa/relatorio?mes=2026-09");
     expect(linkCsvRelatorio("2026-09")).toBe("/caixa/relatorio/csv?mes=2026-09");
+    expect(linkCsvAnual("2026-09")).toBe("/caixa/relatorio/csv-anual?ano=2026");
   });
 
   it("o Caixa linka o relatório do mês que está aberto", () => {
@@ -271,6 +282,7 @@ describe("relatório do mês", () => {
     );
 
     expect(pagina).toContain("href={linkCsvRelatorio(mes)}");
+    expect(pagina).toContain("href={linkCsvAnual(mes)}");
   });
 });
 

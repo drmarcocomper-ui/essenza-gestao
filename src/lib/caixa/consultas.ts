@@ -4,6 +4,7 @@ import type { StatusLancamento, TipoLancamento } from "@/lib/caixa/schema";
 import {
   dataReferenciaCaixa,
   filtroMesCaixa,
+  filtroPeriodoCaixa,
   somarResumoCaixa,
   type ResumoCaixa,
   type VisaoCaixa,
@@ -218,9 +219,7 @@ export async function listarRelatorioMes(
 
   const { data, error } = await supabase
     .from("lancamentos")
-    .select(
-      "id, tipo, status, data_competencia, data_caixa, data_prevista, categoria, descricao, instituicao, titularidade, forma_pagamento, parcelamento, valor, cliente:clientes(nome)",
-    )
+    .select(COLUNAS_RELATORIO)
     .or(filtroMesCaixa(mes))
     .order("criado_em", { ascending: true });
 
@@ -229,6 +228,50 @@ export async function listarRelatorioMes(
   }
 
   return (data ?? []) as unknown as LancamentoRelatorio[];
+}
+
+const COLUNAS_RELATORIO =
+  "id, tipo, status, data_competencia, data_caixa, data_prevista, categoria, descricao, instituicao, titularidade, forma_pagamento, parcelamento, valor, cliente:clientes(nome)";
+
+/**
+ * O PostgREST corta a resposta em 1000 linhas (max-rows do Supabase),
+ * sem erro. Um ano inteiro chega perto disso: a consulta vem em
+ * páginas, até a última vir incompleta.
+ */
+const PAGINA_RELATORIO_ANO = 1000;
+
+/**
+ * Lançamentos do ano inteiro para o CSV anual: o mesmo filtro da visão
+ * Caixa, de janeiro a dezembro. Quem separa por mês é `resumirAno`.
+ */
+export async function listarRelatorioAno(
+  ano: string,
+): Promise<LancamentoRelatorio[]> {
+  const { supabase } = await exigirSessao();
+  const todos: LancamentoRelatorio[] = [];
+
+  for (let inicio = 0; ; inicio += PAGINA_RELATORIO_ANO) {
+    const { data, error } = await supabase
+      .from("lancamentos")
+      .select(COLUNAS_RELATORIO)
+      .or(filtroPeriodoCaixa(`${ano}-01`, `${ano}-12`))
+      // id desempata: sem ordem total, a paginação pode repetir ou pular.
+      .order("criado_em", { ascending: true })
+      .order("id", { ascending: true })
+      .range(inicio, inicio + PAGINA_RELATORIO_ANO - 1);
+
+    if (error) {
+      throw new Error(
+        `Não foi possível carregar o relatório do ano: ${error.message}`,
+      );
+    }
+
+    const pagina = (data ?? []) as unknown as LancamentoRelatorio[];
+
+    todos.push(...pagina);
+
+    if (pagina.length < PAGINA_RELATORIO_ANO) return todos;
+  }
 }
 
 /**

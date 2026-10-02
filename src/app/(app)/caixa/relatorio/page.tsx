@@ -17,7 +17,11 @@ import {
   montarResumo,
   type Grupo,
 } from "@/lib/relatorio/resumo";
-import { linkCsvRelatorio, linkRelatorio } from "@/lib/relatorio/url";
+import {
+  linkCsvAnual,
+  linkCsvRelatorio,
+  linkRelatorio,
+} from "@/lib/relatorio/url";
 
 export const metadata: Metadata = {
   title: "Relatório do mês — Essenza",
@@ -52,14 +56,24 @@ export default async function RelatorioPage({
       <NavegacaoMes mes={mes} linkDoMes={linkRelatorio} />
 
       {/* <a>, não <Link>: é download de arquivo, não navegação. */}
-      <a
-        href={linkCsvRelatorio(mes)}
-        download
-        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white font-medium text-neutral-700 active:bg-neutral-100"
-      >
-        <Download aria-hidden="true" className="size-5" />
-        Baixar CSV do mês
-      </a>
+      <div className="grid grid-cols-2 gap-2">
+        <a
+          href={linkCsvRelatorio(mes)}
+          download
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-2 py-2 text-center text-sm font-medium leading-tight text-neutral-700 active:bg-neutral-100"
+        >
+          <Download aria-hidden="true" className="size-5 shrink-0" />
+          Baixar CSV do mês
+        </a>
+        <a
+          href={linkCsvAnual(mes)}
+          download
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-2 py-2 text-center text-sm font-medium leading-tight text-neutral-700 active:bg-neutral-100"
+        >
+          <Download aria-hidden="true" className="size-5 shrink-0" />
+          Baixar planilha do ano
+        </a>
+      </div>
 
       <Bloco titulo="Entradas recebidas">
         <Linha rotulo="PJ SumUp" grupo={resumo.entradas["PJ SumUp"]} />

@@ -58,11 +58,14 @@ export function deslocarMes(mes: string, passos: number) {
   return `${anoFinal}-${String(mesFinal).padStart(2, "0")}`;
 }
 
+/** '2026-09' → 'Setembro'. */
+export function nomeMes(mes: string) {
+  return NOMES_MES[Number(mes.slice(5, 7)) - 1] ?? "";
+}
+
 /** '2026-09' → 'Setembro de 2026'. */
 export function rotuloMes(mes: string) {
-  const nome = NOMES_MES[Number(mes.slice(5, 7)) - 1] ?? "";
-
-  return `${nome} de ${mes.slice(0, 4)}`;
+  return `${nomeMes(mes)} de ${mes.slice(0, 4)}`;
 }
 
 export function primeiroDia(mes: string) {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dataReferenciaCaixa,
   filtroMesCaixa,
+  filtroPeriodoCaixa,
   marcaCaixa,
   somarResumoCaixa,
 } from "./visao";
@@ -62,6 +63,22 @@ describe("filtroMesCaixa", () => {
       "and(status.eq.Pago,data_caixa.gte.2026-02-01,data_caixa.lte.2026-02-28)," +
         "and(status.eq.Pendente,data_prevista.gte.2026-02-01,data_prevista.lte.2026-02-28)," +
         "and(status.eq.Pendente,data_prevista.is.null,data_competencia.gte.2026-02-01,data_competencia.lte.2026-02-28)",
+    );
+  });
+});
+
+describe("filtroPeriodoCaixa", () => {
+  it("o ano: de 1º de janeiro a 31 de dezembro, nos mesmos três ramos", () => {
+    expect(filtroPeriodoCaixa("2026-01", "2026-12")).toBe(
+      "and(status.eq.Pago,data_caixa.gte.2026-01-01,data_caixa.lte.2026-12-31)," +
+        "and(status.eq.Pendente,data_prevista.gte.2026-01-01,data_prevista.lte.2026-12-31)," +
+        "and(status.eq.Pendente,data_prevista.is.null,data_competencia.gte.2026-01-01,data_competencia.lte.2026-12-31)",
+    );
+  });
+
+  it("de um mês a ele mesmo é o filtro do mês", () => {
+    expect(filtroPeriodoCaixa("2026-02", "2026-02")).toBe(
+      filtroMesCaixa("2026-02"),
     );
   });
 });

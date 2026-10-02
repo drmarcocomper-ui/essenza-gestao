@@ -1,12 +1,19 @@
+import { nomeMes } from "@/lib/caixa/mes";
 import { dataReferenciaCaixa } from "@/lib/caixa/visao";
 import { formatarData } from "@/lib/formatters";
 
 import {
   classificarEntrada,
   classificarSaida,
+  GRUPOS_DESPESA,
   type LancamentoRelatorio,
 } from "./classificar";
-import { centavosDe, ordenar } from "./resumo";
+import {
+  centavosDe,
+  ordenar,
+  resumirAno,
+  type ResumoRelatorio,
+} from "./resumo";
 
 /**
  * O CSV do mês para a contadora: uma linha por lançamento, no formato
@@ -93,4 +100,81 @@ export function gerarCsv(lancamentos: LancamentoRelatorio[]) {
 
 export function nomeArquivoCsv(mes: string) {
   return `essenza-relatorio-${mes}.csv`;
+}
+
+// ---------------------------------------------------------------------
+// CSV anual: uma linha por mês, as colunas na ordem da tela
+// ---------------------------------------------------------------------
+
+type ColunaAnual = {
+  titulo: string;
+  centavos: (resumo: ResumoRelatorio) => number;
+  /** Na linha do total do ano, em branco em vez de somado. */
+  semTotal?: boolean;
+};
+
+const COLUNAS_ANUAL: ColunaAnual[] = [
+  { titulo: "PJ SumUp", centavos: (r) => r.entradas["PJ SumUp"].centavos },
+  { titulo: "PJ Nubank", centavos: (r) => r.entradas["PJ Nubank"].centavos },
+  { titulo: "Total PJ", centavos: (r) => r.totalPJ.centavos },
+  { titulo: "PF Nubank", centavos: (r) => r.entradas["PF Nubank"].centavos },
+  { titulo: "PF PicPay", centavos: (r) => r.entradas["PF PicPay"].centavos },
+  { titulo: "Total PF", centavos: (r) => r.totalPF.centavos },
+  { titulo: "Dinheiro", centavos: (r) => r.entradas.Dinheiro.centavos },
+  { titulo: "Sem PF/PJ", centavos: (r) => r.entradas["Sem PF/PJ"].centavos },
+  { titulo: "Total entradas", centavos: (r) => r.totalEntradas.centavos },
+  ...GRUPOS_DESPESA.map(
+    (grupo): ColunaAnual => ({
+      titulo: grupo,
+      centavos: (r) => r.despesas[grupo].centavos,
+    }),
+  ),
+  { titulo: "Total despesas", centavos: (r) => r.totalDespesas.centavos },
+  { titulo: "Resultado", centavos: (r) => r.resultado },
+  { titulo: "Participação nos lucros", centavos: (r) => r.retirada.centavos },
+  // Previsto de cada mês é foto de quando o arquivo foi gerado: somar
+  // parcelas de meses diferentes não diz nada à contadora.
+  {
+    titulo: "Previsto a receber",
+    centavos: (r) => r.previsto.centavos,
+    semTotal: true,
+  },
+];
+
+/**
+ * O ano para a contadora: 12 linhas (janeiro a dezembro, meses futuros
+ * zerados) e a linha "Total <ano>". Cada mês é o mesmo `montarResumo`
+ * da tela; o total é a soma das 12 linhas, coluna a coluna.
+ *
+ * @param ano 'AAAA'.
+ */
+export function gerarCsvAnual(lancamentos: LancamentoRelatorio[], ano: string) {
+  const meses = resumirAno(lancamentos, ano);
+
+  const linhas = meses.map(({ mes, resumo }) =>
+    [nomeMes(mes), ...COLUNAS_ANUAL.map((c) => centavosCsv(c.centavos(resumo)))],
+  );
+
+  const total = [
+    `Total ${ano}`,
+    ...COLUNAS_ANUAL.map((coluna) =>
+      coluna.semTotal
+        ? ""
+        : centavosCsv(
+            meses.reduce((soma, { resumo }) => soma + coluna.centavos(resumo), 0),
+          ),
+    ),
+  ];
+
+  return (
+    BOM +
+    [["Mês", ...COLUNAS_ANUAL.map((c) => c.titulo)], ...linhas, total]
+      .map((campos) => campos.map(campoCsv).join(SEPARADOR))
+      .join(FIM_DE_LINHA) +
+    FIM_DE_LINHA
+  );
+}
+
+export function nomeArquivoCsvAnual(ano: string) {
+  return `Essenza_${ano}_relatorio_anual.csv`;
 }

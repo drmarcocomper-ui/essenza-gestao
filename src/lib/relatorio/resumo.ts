@@ -72,6 +72,36 @@ export function ordenar(lancamentos: LancamentoRelatorio[]) {
   );
 }
 
+/**
+ * O ano mês a mês: cada lançamento vai para o mês da sua data de
+ * referência (a mesma do filtro do mês) e cada mês passa por
+ * `montarResumo` — nenhuma regra própria. Sempre 12 meses, de janeiro a
+ * dezembro; mês sem lançamento sai zerado. Fora do ano, ignorado.
+ *
+ * @param ano 'AAAA'.
+ */
+export function resumirAno(
+  lancamentos: LancamentoRelatorio[],
+  ano: string,
+): { mes: string; resumo: ResumoRelatorio }[] {
+  const meses = Array.from(
+    { length: 12 },
+    (_, indice) => `${ano}-${String(indice + 1).padStart(2, "0")}`,
+  );
+  const porMes = new Map<string, LancamentoRelatorio[]>(
+    meses.map((mes) => [mes, []]),
+  );
+
+  for (const lancamento of lancamentos) {
+    porMes.get(dataReferenciaCaixa(lancamento).slice(0, 7))?.push(lancamento);
+  }
+
+  return meses.map((mes) => ({
+    mes,
+    resumo: montarResumo(porMes.get(mes) ?? []),
+  }));
+}
+
 export function montarResumo(
   lancamentos: LancamentoRelatorio[],
 ): ResumoRelatorio {
