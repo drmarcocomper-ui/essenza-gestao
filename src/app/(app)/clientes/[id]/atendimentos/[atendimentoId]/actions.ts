@@ -27,6 +27,7 @@ import {
   novoProdutoDoAtendimento,
   type ProdutoConferivel,
 } from "@/lib/atendimentos/produtos";
+import { atendimentoSchema } from "@/lib/atendimentos/schema";
 import { exigirSessao } from "@/lib/auth";
 import { MENSAGEM_CONTA_JA_ABERTA } from "@/lib/caixa/travas";
 import {
@@ -463,6 +464,58 @@ export async function reabrirConta(
   for (const { id } of apagados) {
     revalidatePath(`/caixa/${id}/editar`);
   }
+
+  return {};
+}
+
+/**
+ * Troca a observação do atendimento — com a conta aberta ou fechada.
+ *
+ * A conta fecha uma vez, a ficha continua editável: observação é texto,
+ * não dinheiro. Por isso este caminho só escreve `atendimentos.observacao`
+ * e nada mais — nem data, nem cliente, nem `atendimento_itens`, nem
+ * `lancamentos`. A trava da conta fechada fica onde está.
+ *
+ * O `cliente_id` entra no filtro como na leitura: a URL traz os dois.
+ * Zero linhas atualizadas é atendimento que não existe mais (ou não é
+ * desta cliente), e volta como mensagem, não exceção.
+ */
+export async function editarObservacao(
+  clienteId: string,
+  atendimentoId: string,
+  observacao: string,
+): Promise<{ erro?: string }> {
+  // A mesma regra do registro: até 1000 caracteres, vazio vira null.
+  const validacao = atendimentoSchema.shape.observacao.safeParse(observacao);
+
+  if (!validacao.success) {
+    return {
+      erro:
+        validacao.error.issues[0]?.message ??
+        "Não foi possível salvar a observação.",
+    };
+  }
+
+  const { supabase } = await exigirSessao();
+
+  const { data, error } = await supabase
+    .from("atendimentos")
+    .update({ observacao: validacao.data })
+    .eq("id", atendimentoId)
+    .eq("cliente_id", clienteId)
+    .select("id");
+
+  if (error) {
+    return { erro: `Não foi possível salvar a observação: ${error.message}` };
+  }
+
+  if (!data || data.length === 0) {
+    return { erro: "Este atendimento não existe mais." };
+  }
+
+  // A tela do atendimento e a ficha da cliente, que lista a observação.
+  revalidatePath(`/clientes/${clienteId}/atendimentos/${atendimentoId}`);
+  revalidatePath(`/clientes/${clienteId}`);
 
   return {};
 }

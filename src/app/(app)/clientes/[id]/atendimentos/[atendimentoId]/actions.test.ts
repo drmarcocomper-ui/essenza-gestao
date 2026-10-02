@@ -5,6 +5,7 @@ import { MENSAGEM_CONTA_JA_ABERTA } from "@/lib/caixa/travas";
 const {
   tabela,
   remover,
+  atualizar,
   inserir,
   filtros,
   revalidatePath,
@@ -17,6 +18,8 @@ const {
 } = vi.hoisted(() => ({
   tabela: vi.fn(),
   remover: vi.fn(),
+  /** Cada update: os dados enviados. */
+  atualizar: vi.fn(),
   /** Cada insert: (tabela, linhas). */
   inserir: vi.fn(),
   /** Cada filtro encadeado no delete, na ordem: ["eq", coluna, valor]… */
@@ -74,6 +77,24 @@ vi.mock("@/lib/auth", () => ({
 
             return cadeia;
           },
+          update: (dados: unknown) => {
+            atualizar(dados);
+
+            // Mesma cadeia do delete: filtros registrados, `select`
+            // devolve a `resposta`.
+            const cadeia = {
+              eq: (...args: unknown[]) => {
+                filtros.push(["eq", ...args]);
+                return cadeia;
+              },
+              select: async (colunas: string) => {
+                filtros.push(["select", colunas]);
+                return resposta;
+              },
+            };
+
+            return cadeia;
+          },
           insert: async (linhas: unknown) => {
             inserir(nome, linhas);
             return respostaInsert[nome] ?? { error: null };
@@ -84,7 +105,7 @@ vi.mock("@/lib/auth", () => ({
   }),
 }));
 
-import { fecharConta, reabrirConta } from "./actions";
+import { editarObservacao, fecharConta, reabrirConta } from "./actions";
 
 const CLIENTE = "44444444-4444-4444-8444-444444444444";
 const ATENDIMENTO = "55555555-5555-4555-8555-555555555555";
@@ -96,6 +117,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tabela.mockReset();
   remover.mockReset();
+  atualizar.mockReset();
   revalidatePath.mockReset();
   filtros.length = 0;
   resposta.data = [];
@@ -341,5 +363,84 @@ describe("fecharConta com peça de extensão", () => {
     expect(saida.mensagem).not.toContain("Tente de novo");
     // O dinheiro não entra.
     expect(inserir.mock.calls.some(([nome]) => nome === "lancamentos")).toBe(false);
+  });
+});
+
+describe("editarObservacao", () => {
+  it("um único update em atendimentos, só da observação, pelos dois ids", async () => {
+    resposta.data = [{ id: ATENDIMENTO }];
+
+    const resultado = await editarObservacao(
+      CLIENTE,
+      ATENDIMENTO,
+      "  Cliente prefere água morna  ",
+    );
+
+    expect(resultado).toEqual({});
+    expect(tabela).toHaveBeenCalledTimes(1);
+    expect(tabela).toHaveBeenCalledWith("atendimentos");
+    expect(tabela).not.toHaveBeenCalledWith("atendimento_itens");
+    expect(tabela).not.toHaveBeenCalledWith("lancamentos");
+    expect(remover).not.toHaveBeenCalled();
+    expect(inserir).not.toHaveBeenCalled();
+    expect(atualizar).toHaveBeenCalledTimes(1);
+    expect(atualizar).toHaveBeenCalledWith({
+      observacao: "Cliente prefere água morna",
+    });
+    expect(filtros).toEqual([
+      ["eq", "id", ATENDIMENTO],
+      ["eq", "cliente_id", CLIENTE],
+      ["select", "id"],
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/clientes/${CLIENTE}/atendimentos/${ATENDIMENTO}`,
+    );
+  });
+
+  it("não lê o atendimento: funciona com a conta aberta ou fechada", async () => {
+    resposta.data = [{ id: ATENDIMENTO }];
+
+    await editarObservacao(CLIENTE, ATENDIMENTO, "x");
+
+    expect(obterAtendimento).not.toHaveBeenCalled();
+  });
+
+  it("vazio vira null", async () => {
+    resposta.data = [{ id: ATENDIMENTO }];
+
+    await editarObservacao(CLIENTE, ATENDIMENTO, "   ");
+
+    expect(atualizar).toHaveBeenCalledWith({ observacao: null });
+  });
+
+  it("zero linhas volta como mensagem", async () => {
+    resposta.data = [];
+
+    const resultado = await editarObservacao(CLIENTE, ATENDIMENTO, "x");
+
+    expect(resultado).toEqual({ erro: "Este atendimento não existe mais." });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("erro do banco volta como mensagem", async () => {
+    resposta.error = { message: "falhou" };
+    resposta.data = null;
+
+    const resultado = await editarObservacao(CLIENTE, ATENDIMENTO, "x");
+
+    expect(resultado).toEqual({
+      erro: "Não foi possível salvar a observação: falhou",
+    });
+  });
+
+  it("acima de 1000 caracteres nem chega ao banco", async () => {
+    const resultado = await editarObservacao(
+      CLIENTE,
+      ATENDIMENTO,
+      "a".repeat(1001),
+    );
+
+    expect(resultado).toEqual({ erro: "Máximo de 1000 caracteres" });
+    expect(tabela).not.toHaveBeenCalled();
   });
 });

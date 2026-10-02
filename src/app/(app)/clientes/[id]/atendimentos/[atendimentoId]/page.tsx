@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { FlaskConical, Lock, Plus } from "lucide-react";
 
 import {
+  editarObservacao,
   fecharConta,
   reabrirConta,
 } from "@/app/(app)/clientes/[id]/atendimentos/[atendimentoId]/actions";
+import EditarObservacao from "@/components/atendimentos/EditarObservacao";
 import FecharConta, {
   type LinhaItem,
 } from "@/components/atendimentos/FecharConta";
@@ -80,11 +82,11 @@ export default async function AtendimentoPage({
         </div>
       </div>
 
-      {atendimento.observacao && (
-        <p className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm whitespace-pre-line text-neutral-700">
-          {atendimento.observacao}
-        </p>
-      )}
+      {/* Editável com a conta aberta ou fechada: é texto, não dinheiro. */}
+      <EditarObservacao
+        acao={editarObservacao.bind(null, cliente.id, atendimento.id)}
+        observacao={atendimento.observacao}
+      />
 
       {/* A ficha de coloração continua editável depois da conta fechada:
           resultado e ajuste para a próxima só aparecem depois. */}
